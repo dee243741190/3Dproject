@@ -43,6 +43,15 @@ void Update()
     {
         grounded = Physics.Raycast(transform.position, Vector3.down, playerHeight * 0.5f + 0.2f, Ground); //从角色中心点向正下方发射射线
 
+        // 背包打开时屏蔽移动与跳跃输入，并停止跑步动画。
+        if (BackpackUIController.IsAnyBackpackOpen)
+        {
+            horizontalInput = 0f;
+            verticalInput = 0f;
+            animator.SetBool("Run", false);
+            return;
+        }
+
         MyInput(); 
         animator.SetBool("Run", horizontalInput != 0f || verticalInput != 0f); //设置动画参数，判断是否在移动
         SpeedControl(); //限制最大速度
@@ -55,6 +64,14 @@ void Update()
 
     void FixedUpdate() 
     {
+        if (BackpackUIController.IsAnyBackpackOpen)
+        {
+            // 清除水平惯性，但保留竖直速度与重力，避免空中打开背包时悬浮。
+            rb.velocity = new Vector3(0f, rb.velocity.y, 0f);
+            rb.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
+            return;
+        }
+
         MovePlayer(); 
         rb.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration); //应用自定义重力
     }

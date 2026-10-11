@@ -33,6 +33,13 @@ public class ThirdPersonCam : MonoBehaviour
 
     void Update()
     {
+        // 背包打开时不再根据键盘输入旋转角色模型。
+        if (BackpackUIController.IsAnyBackpackOpen)
+            return;
+
+        if (Camera.main == null)
+            return;
+
         Vector3 viewDir = Camera.main.transform.forward; //获取摄像机的前向方向
         viewDir.y = 0f;
         orientation.forward = viewDir.normalized; //将角色方向参考的前向方向设置为摄像机的水平前向方向
