@@ -155,31 +155,37 @@ void Update()
         readyToJump = true;
     }
 
+    //玩家进入推箱状态
     public bool BeginPush(PushableBox box, Vector3 direction)
     {
+        //箱子不存在或背包正在打开时，不能开始推动。
         if (box == null || BackpackUIController.IsAnyBackpackOpen)
             return false;
 
+        //推箱只使用水平方向，忽略箱子与玩家之间的高度差。
         direction.y = 0f;
+        //方向长度太小时无法确定推动方向，取消推动。
         if (direction.sqrMagnitude < 0.01f)
             return false;
 
-        pushedBox = box;
-        pushDirection = direction.normalized;
-        return true;
+        pushedBox = box; //记录当前正在推动的箱子；不为空就代表玩家处于推动状态。
+        pushDirection = direction.normalized; //保存单位方向，推动期间角色和箱子都沿这个方向移动。
+        return true; //通知箱子脚本：玩家已经成功进入推动状态。
     }
 
+    //结束推箱状态。box 留空时强制结束；传入箱子时，只允许当前箱子结束自己的推动状态。
     public void EndPush(PushableBox box = null)
     {
         if (box != null && pushedBox != box)
             return;
 
         pushedBox = null;
-        pushDirection = Vector3.zero;
+        pushDirection = Vector3.zero; 
         if (animator != null)
-            animator.SetBool("Push", false);
+            animator.SetBool("Push", false); //退出推箱动画，恢复待机或普通移动动画。
     }
 
+    //玩家物体被关闭或场景切换时，确保不会残留推箱状态和动画参数。
     private void OnDisable()
     {
         EndPush();

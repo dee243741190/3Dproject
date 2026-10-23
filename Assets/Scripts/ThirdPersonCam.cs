@@ -46,13 +46,15 @@ public class ThirdPersonCam : MonoBehaviour
         viewDir.y = 0f;
         orientation.forward = viewDir.normalized; //将角色方向参考的前向方向设置为摄像机的水平前向方向
 
+        // 玩家正在推箱子时，不再根据普通移动输入旋转角色模型。
+        // 角色会平滑转向开始推动时锁定的方向，避免推动过程中身体转向摄像机或其他方向。
         if (playerController != null && playerController.IsPushing)
         {
             playerObj.forward = Vector3.Slerp(
-                playerObj.forward,
-                playerController.PushDirection,
-                Time.deltaTime * rotationSpeed);
-            return;
+                playerObj.forward,                    //角色模型当前朝向
+                playerController.PushDirection,      //开始推箱时记录的推动方向
+                Time.deltaTime * rotationSpeed);      //按旋转速度平滑转向，避免突然转身
+            return; //推动状态下不再执行下面的普通移动朝向逻辑
         }
 
         float horizontalInput = Input.GetAxisRaw("Horizontal"); //获取水平输入

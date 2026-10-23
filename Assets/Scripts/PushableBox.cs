@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
@@ -9,6 +9,7 @@ using UnityEngine;
 [AddComponentMenu("Interaction/Pushable Box")]
 public class PushableBox : MonoBehaviour
 {
+    //记录场景中所有可推动箱子，并保证同一时间只选中、推动一个。
     private static readonly List<PushableBox> ActiveBoxes = new List<PushableBox>();
     private static PushableBox currentTarget;
     private static PushableBox pushingBox;
@@ -41,6 +42,7 @@ public class PushableBox : MonoBehaviour
     private bool isPushing;
     private Vector3 pushDirection;
 
+    //进入游戏时清空静态记录，避免关闭域重载后保留上次运行的数据。
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStaticState()
     {
@@ -52,6 +54,7 @@ public class PushableBox : MonoBehaviour
 
     private void Awake()
     {
+        //自动查找玩家、提示文字和物理组件，减少 Inspector 中的手动配置。
         if (player == null)
             player = FindObjectOfType<PlayerController>();
 
@@ -83,6 +86,7 @@ public class PushableBox : MonoBehaviour
 
     private void Update()
     {
+        //选择最近且位于玩家前方的箱子，并根据 E 键进入或退出推动状态。
         RefreshNearestTarget();
 
         if (isPushing)
@@ -98,6 +102,7 @@ public class PushableBox : MonoBehaviour
 
     private void FixedUpdate()
     {
+        //推动状态下只有向前输入有效，箱子沿开始推动时记录的方向移动。
         if (!isPushing || player == null || boxRigidbody == null)
             return;
 
@@ -117,6 +122,7 @@ public class PushableBox : MonoBehaviour
 
     private void LateUpdate()
     {
+        //让世界空间提示文字始终面向主摄像机。
         if (!interactionVisible || pushPrompt == null || !faceCamera || Camera.main == null)
             return;
 
@@ -145,6 +151,7 @@ public class PushableBox : MonoBehaviour
 
     private void StopPushing()
     {
+        //清除玩家和箱子的推动状态，同时停止箱子的水平移动。
         if (!isPushing)
             return;
 
@@ -169,6 +176,7 @@ public class PushableBox : MonoBehaviour
 
     private static void RefreshNearestTarget()
     {
+        //所有箱子都会调用此方法，但每帧只统一计算一次最近目标。
         if (lastSelectionFrame == Time.frameCount)
             return;
 
@@ -219,6 +227,7 @@ public class PushableBox : MonoBehaviour
 
     private bool PlayerFacesBox()
     {
+        //通过点积判断箱子是否大致位于玩家当前朝向的前方。
         Transform facing = player.orientation != null ? player.orientation : player.transform;
         Vector3 toBox = transform.position - player.transform.position;
         toBox.y = 0f;
@@ -227,6 +236,7 @@ public class PushableBox : MonoBehaviour
 
     private float GetDistanceToPlayer()
     {
+        //计算玩家碰撞体与箱子碰撞体表面的最近距离，用于避免隔空推动。
         float closestDistance = Vector3.Distance(transform.position, player.transform.position);
         foreach (Collider targetCollider in targetColliders)
         {
@@ -257,6 +267,7 @@ public class PushableBox : MonoBehaviour
 
     private void CacheComponents()
     {
+        //缓存箱子的渲染器、描边层和碰撞体，避免每帧重复查找组件。
         Renderer[] allRenderers = GetComponentsInChildren<Renderer>(true);
         List<Renderer> boxRenderers = new List<Renderer>();
         foreach (Renderer targetRenderer in allRenderers)
@@ -275,6 +286,7 @@ public class PushableBox : MonoBehaviour
 
     private void SetInteractionVisible(bool visible)
     {
+        //描边和交互提示始终一起显示或隐藏。
         interactionVisible = visible;
         uint outlineBit = 1u << outlineRenderingLayer;
         for (int i = 0; i < targetRenderers.Length; i++)
@@ -291,6 +303,7 @@ public class PushableBox : MonoBehaviour
 
     private void OnDisable()
     {
+        //箱子被关闭或销毁时，从全局列表移除并清理交互状态。
         StopPushing();
         ActiveBoxes.Remove(this);
         if (currentTarget == this)
