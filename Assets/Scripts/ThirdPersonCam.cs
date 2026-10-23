@@ -8,9 +8,11 @@ public class ThirdPersonCam : MonoBehaviour
     public Transform playerObj; //角色模型参考
 
     public float rotationSpeed = 7f; //摄像机旋转速度
+    PlayerController playerController;
 
     IEnumerator Start()
     {
+        playerController = GetComponent<PlayerController>();
         CinemachineFreeLook freeLook = FindObjectOfType<CinemachineFreeLook>();
 
         //目的是让游戏开始时，摄像机方向和角色初始朝向基本一致
@@ -43,6 +45,15 @@ public class ThirdPersonCam : MonoBehaviour
         Vector3 viewDir = Camera.main.transform.forward; //获取摄像机的前向方向
         viewDir.y = 0f;
         orientation.forward = viewDir.normalized; //将角色方向参考的前向方向设置为摄像机的水平前向方向
+
+        if (playerController != null && playerController.IsPushing)
+        {
+            playerObj.forward = Vector3.Slerp(
+                playerObj.forward,
+                playerController.PushDirection,
+                Time.deltaTime * rotationSpeed);
+            return;
+        }
 
         float horizontalInput = Input.GetAxisRaw("Horizontal"); //获取水平输入
         float verticalInput = Input.GetAxisRaw("Vertical"); //获取垂直输入

@@ -20,6 +20,7 @@ public class NearbyPickup : MonoBehaviour
     private static readonly List<NearbyPickup> ActivePickups = new List<NearbyPickup>(); // 创建一个全局列表，保存当前所有启用的拾取物
     private static NearbyPickup currentTarget; //当前距离玩家最近、真正可以交互的拾取物
     private static int lastSelectionFrame = -1; //上一次选择目标的帧数，防止一帧重复计算
+    private static int lastPickupFrame = -1; //同一次按键所在帧最多只能拾取一个物品
 
     [Header("Detection")] 
     [Tooltip("不指定时，会自动寻找挂有 PlayerController 的物体。")]
@@ -58,6 +59,7 @@ public class NearbyPickup : MonoBehaviour
         ActivePickups.Clear(); //清空拾取物列表
         currentTarget = null; //清空当前目标
         lastSelectionFrame = -1; //重置上一帧参数
+        lastPickupFrame = -1; //重置拾取输入记录
     }
 
     private void Awake() //物品初始化时缓存组件并关闭初始交互效果
@@ -83,8 +85,12 @@ public class NearbyPickup : MonoBehaviour
     {
         RefreshNearestTarget(); //每帧刷新最近的拾取物
 
-        if (currentTarget == this && !BackpackUIController.IsAnyBackpackOpen && Input.GetKeyDown(pickupKey)) //只有当前最近的拾取物才响应按键
+        if (currentTarget == this
+            && lastPickupFrame != Time.frameCount
+            && !BackpackUIController.IsAnyBackpackOpen
+            && Input.GetKeyDown(pickupKey)) //同一帧只能由当前最近的一个拾取物响应
         {
+            lastPickupFrame = Time.frameCount; //先占用本帧输入，避免销毁后第二个物品接着响应
             TryPickup(); //尝试拾取物品
         }
     }

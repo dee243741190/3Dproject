@@ -159,9 +159,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   orientation: {fileID: 2567120226434672248}
-  player: {fileID: 5170790039603881824}
   playerObj: {fileID: 594504655726364121}
-  rb: {fileID: 2052931214371726483}
   rotationSpeed: 7
 --- !u!114 &3013820112600977529
 MonoBehaviour:
@@ -181,6 +179,7 @@ MonoBehaviour:
   jumpCooldown: 0.25
   airMultiplier: 0.4
   gravityMultiplier: 2
+  pushMoveSpeed: 2.5
   jumpKey: 32
   playerHeight: 2
   Ground:
@@ -684,10 +683,10 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.18373217
-  m_Height: 0.68714625
+  m_Radius: 0.14092413
+  m_Height: 0.6743884
   m_Direction: 1
-  m_Center: {x: -0.004803049, y: 0.34509677, z: 0}
+  m_Center: {x: -0.055186488, y: 0.33871785, z: -0.012853046}
 --- !u!4 &594504655726364121 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: ecc0ec2db230f6d4a8c418cd092977a7,
