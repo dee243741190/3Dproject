@@ -45,7 +45,7 @@ public class PlayerController : MonoBehaviour
         rb.freezeRotation = true; //冻结刚体旋转，防止角色倾斜
     }
 
-void Update()
+    void Update()
     {
         grounded = Physics.Raycast(transform.position, Vector3.down, playerHeight * 0.5f + 0.2f, Ground); //从角色中心点向正下方发射射线
 
@@ -59,9 +59,19 @@ void Update()
             return;
         }
 
-        MyInput(); 
-        animator.SetBool("Run", !IsPushing && (horizontalInput != 0f || verticalInput != 0f)); //推箱时不播放跑步动画
-        animator.SetBool("Push", IsPushing); //按住交互键期间保持推箱动画
+        MyInput();
+
+        //推动动画的优先级最高。推动过程中无论 W 是否按下，都不允许 Run 抢占。
+        if (IsPushing)
+        {
+            animator.SetBool("Run", false);
+            animator.SetBool("Push", true);
+        }
+        else
+        {
+            animator.SetBool("Push", false);
+            animator.SetBool("Run", horizontalInput != 0f || verticalInput != 0f);
+        }
         SpeedControl(); //限制最大速度
 
         if (grounded) 
@@ -106,9 +116,12 @@ void Update()
 
     private void MovePlayer()
     {
-        moveDirection = IsPushing
-            ? pushDirection * verticalInput
-            : orientation.forward * verticalInput + orientation.right * horizontalInput;
+        //推动位移由 PushableBox 统一计算并同时应用给角色和箱子。
+        //这里不能再单独 AddForce，否则两者速度不同，距离会越推越远。
+        if (IsPushing)
+            return;
+
+        moveDirection = orientation.forward * verticalInput + orientation.right * horizontalInput;
 
         // 有输入：沿用原本的AddForce推力逻辑
         if (moveDirection.magnitude > 0.01f)
@@ -116,7 +129,7 @@ void Update()
             if (grounded)
             {
                 rb.AddForce(
-                    moveDirection.normalized * (IsPushing ? pushMoveSpeed : moveSpeed) * 10f,
+                    moveDirection.normalized * moveSpeed * 10f,
                     ForceMode.Force
                 ); //地面移动
             }
@@ -128,6 +141,16 @@ void Update()
                 ); //空中移动，乘以空中移动倍率
             }
         }
+    }
+
+    //由当前推动的箱子调用，确保角色和箱子使用完全相同的水平位移。
+    public void ApplyPushMovement(PushableBox box, Vector3 movementDelta)
+    {
+        if (box == null || pushedBox != box || rb == null)
+            return;
+
+        rb.velocity = new Vector3(0f, rb.velocity.y, 0f);
+        rb.MovePosition(rb.position + movementDelta);
     }
 
 
@@ -170,6 +193,13 @@ void Update()
 
         pushedBox = box; //记录当前正在推动的箱子；不为空就代表玩家处于推动状态。
         pushDirection = direction.normalized; //保存单位方向，推动期间角色和箱子都沿这个方向移动。
+
+        //Update 的执行顺序不固定，进入推动的当帧就关闭 Run，避免闪一下跑步动画。
+        if (animator != null)
+        {
+            animator.SetBool("Run", false);
+            animator.SetBool("Push", true);
+        }
         return true; //通知箱子脚本：玩家已经成功进入推动状态。
     }
 

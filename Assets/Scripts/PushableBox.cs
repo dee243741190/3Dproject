@@ -14,6 +14,7 @@ public class PushableBox : MonoBehaviour
     private static PushableBox currentTarget;
     private static PushableBox pushingBox;
     private static int lastSelectionFrame = -1;
+    private static bool waitForPushKeyRelease;
 
     [Header("Interaction")]
     [SerializeField] private PlayerController player;
@@ -50,6 +51,7 @@ public class PushableBox : MonoBehaviour
         currentTarget = null;
         pushingBox = null;
         lastSelectionFrame = -1;
+        waitForPushKeyRelease = false;
     }
 
     private void Awake()
@@ -89,6 +91,10 @@ public class PushableBox : MonoBehaviour
         //选择最近且位于玩家前方的箱子，并根据 E 键进入或退出推动状态。
         RefreshNearestTarget();
 
+        //异常中断后必须先松开一次 E，避免同一次按住操作立刻重新进入推动。
+        if (!Input.GetKey(pushKey))
+            waitForPushKeyRelease = false;
+
         if (isPushing)
         {
             if (!Input.GetKey(pushKey) || BackpackUIController.IsAnyBackpackOpen || !PlayerStillClose())
@@ -96,7 +102,9 @@ public class PushableBox : MonoBehaviour
             return;
         }
 
-        if (currentTarget == this && Input.GetKey(pushKey) && !BackpackUIController.IsAnyBackpackOpen)
+        //持续按住 E 才能开始并保持推动；松开 E 立即退出，不是开关模式。
+        if (!waitForPushKeyRelease && currentTarget == this && Input.GetKey(pushKey)
+            && !BackpackUIController.IsAnyBackpackOpen)
             StartPushing();
     }
 
@@ -106,18 +114,21 @@ public class PushableBox : MonoBehaviour
         if (!isPushing || player == null || boxRigidbody == null)
             return;
 
-        Vector3 velocity = boxRigidbody.velocity;
         if (Input.GetAxisRaw("Vertical") > 0f)
         {
-            velocity.x = pushDirection.x * boxPushSpeed;
-            velocity.z = pushDirection.z * boxPushSpeed;
+            Vector3 movementDelta = pushDirection * boxPushSpeed * Time.fixedDeltaTime;
+            Vector3 velocity = boxRigidbody.velocity;
+            boxRigidbody.velocity = new Vector3(0f, velocity.y, 0f);
+            boxRigidbody.MovePosition(boxRigidbody.position + movementDelta);
+            player.ApplyPushMovement(this, movementDelta);
         }
         else
         {
+            Vector3 velocity = boxRigidbody.velocity;
             velocity.x = 0f;
             velocity.z = 0f;
+            boxRigidbody.velocity = velocity;
         }
-        boxRigidbody.velocity = velocity;
     }
 
     private void LateUpdate()
@@ -156,6 +167,8 @@ public class PushableBox : MonoBehaviour
             return;
 
         isPushing = false;
+        //只有异常退出时才阻止同一次 E 重新进入；正常松开 E 时可以直接准备下一次。
+        waitForPushKeyRelease = Input.GetKey(pushKey);
         if (pushingBox == this)
             pushingBox = null;
         if (player != null)

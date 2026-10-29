@@ -15,6 +15,9 @@ public class ThirdPersonCam : MonoBehaviour
         playerController = GetComponent<PlayerController>();
         CinemachineFreeLook freeLook = FindObjectOfType<CinemachineFreeLook>();
 
+        if (freeLook == null)
+            yield break;
+
         //目的是让游戏开始时，摄像机方向和角色初始朝向基本一致
         freeLook.m_XAxis.m_InputAxisName = ""; //清空 Cinemachine 的输入轴名称，临时禁止鼠标控制摄像机
         freeLook.m_YAxis.m_InputAxisName = ""; 
@@ -70,4 +73,5 @@ public class ThirdPersonCam : MonoBehaviour
             );
         }
     }
+
 }
