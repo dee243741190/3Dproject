@@ -175851,6 +175851,21 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5794549961096668659, guid: fc259160363ca9042b2252d01b50fc89,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6019041514396914413, guid: fc259160363ca9042b2252d01b50fc89,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6557281069818513957, guid: fc259160363ca9042b2252d01b50fc89,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7543804026710856376, guid: fc259160363ca9042b2252d01b50fc89,
         type: 3}
       propertyPath: m_Name
@@ -284112,7 +284127,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 612879665}
   m_HandleRect: {fileID: 612879664}
   m_Direction: 2
-  m_Value: 0.99999976
+  m_Value: 1.0000002
   m_Size: 0.65719867
   m_NumberOfSteps: 0
   m_OnValueChanged:
