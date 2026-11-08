@@ -1,0 +1,242 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+using Cinemachine;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+[DisallowMultipleComponent]
+public sealed class QuestUI : MonoBehaviour
+{
+    [Header("Task UI")]
+    [SerializeField] private GameObject taskPanel;
+    [SerializeField] private TMP_Text taskText;
+
+    [Header("Dialogue UI")]
+    [SerializeField] private GameObject dialoguePanel;
+    [SerializeField] private TMP_Text speakerNameText;
+    [SerializeField] private TMP_Text dialogueText;
+    [SerializeField] private Button confirmButton;
+    [SerializeField] private TMP_Text confirmButtonText;
+    [SerializeField] private Button cancelButton;
+    [SerializeField] private TMP_Text cancelButtonText;
+    [SerializeField] private TMP_Text continueHintText;
+
+    [Header("Optional")]
+    [SerializeField] private Behaviour playerController;
+
+    private IReadOnlyList<string> lines;
+    private int lineIndex;
+    private Action confirmed;
+    private CinemachineVirtualCameraBase dialogueCamera;
+    private int previousCameraPriority;
+    private bool playerControllerWasEnabled;
+    private Behaviour playerLookController;
+    private bool playerLookControllerWasEnabled;
+    private string finalConfirmLabel;
+    private bool showCancelOnLastLine;
+    private int selectedChoice = 1;
+
+    public static QuestUI Instance { get; private set; }
+    public bool IsDialogueOpen => dialoguePanel != null && dialoguePanel.activeSelf;
+    public TMP_FontAsset UiFont => dialogueText != null ? dialogueText.font : null;
+
+    private void Awake()
+    {
+        Instance = this;
+        confirmButton?.onClick.AddListener(Confirm);
+        cancelButton?.onClick.AddListener(CloseDialogue);
+        if (taskPanel != null) taskPanel.SetActive(false);
+        if (dialoguePanel != null) dialoguePanel.SetActive(false);
+        EnsureContinueHint();
+    }
+
+    private void Start()
+    {
+        // Normal gameplay uses a captured mouse. Menus such as the backpack can
+        // still override this after they open.
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+
+    private void Update()
+    {
+        if (!IsDialogueOpen || lines == null)
+            return;
+
+        bool choiceVisible = showCancelOnLastLine && lineIndex == lines.Count - 1;
+        if (choiceVisible)
+        {
+            if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A))
+                SelectChoice(0);
+            else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
+                SelectChoice(1);
+            else if (Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter))
+            {
+                if (selectedChoice == 0) CloseDialogue();
+                else Confirm();
+            }
+        }
+        else if (
+            (Input.GetKeyDown(KeyCode.Space) ||
+             Input.GetKeyDown(KeyCode.Return) ||
+             Input.GetKeyDown(KeyCode.KeypadEnter)))
+        {
+            Confirm();
+        }
+    }
+
+    public void ShowQuest(QuestRuntime quest, QuestManager manager)
+    {
+        if (quest == null || quest.State == QuestState.Available) return;
+        if (taskPanel != null) taskPanel.SetActive(quest.State != QuestState.Completed);
+        if (quest.State == QuestState.Completed) return;
+        if (taskText == null) return;
+
+        if (quest.State == QuestState.ReadyToTurnIn)
+        {
+            taskText.text = "<color=#F3D78A><b>" + quest.Data.DisplayName +
+                "</b></color>\n<color=#FFFFFF><size=24>返回任务发布者处交付</size></color>";
+            return;
+        }
+
+        StringBuilder text = new StringBuilder();
+        foreach (QuestObjectiveRuntime objective in quest.Objectives)
+        {
+            if (text.Length > 0) text.AppendLine();
+            QuestObjectiveData data = objective.Data;
+            text.Append(string.IsNullOrWhiteSpace(data.Description) ? "完成任务目标" : data.Description);
+            if (data.Type == QuestObjectiveType.CollectItem)
+                text.Append(' ').Append(manager.GetObjectiveProgress(objective)).Append('/').Append(data.RequiredAmount);
+        }
+        taskText.text = "<color=#F3D78A><b>" + quest.Data.DisplayName +
+            "</b></color>\n<color=#FFFFFF><size=24>" + text + "</size></color>";
+    }
+
+    public void ShowDialogue(
+        QuestDialogue dialogue,
+        string confirmLabel,
+        bool showCancel,
+        Action onConfirmed,
+        CinemachineVirtualCameraBase camera)
+    {
+        if (dialogue == null || dialogue.Lines.Count == 0) return;
+        lines = dialogue.Lines;
+        lineIndex = 0;
+        confirmed = onConfirmed;
+        dialogueCamera = camera;
+        finalConfirmLabel = confirmLabel;
+        showCancelOnLastLine = showCancel;
+        if (speakerNameText != null) speakerNameText.text = dialogue.SpeakerName;
+        if (confirmButtonText != null) confirmButtonText.text = lines.Count > 1 ? "继续" : confirmLabel;
+        if (cancelButtonText != null) cancelButtonText.text = "取消";
+        if (confirmButton != null) confirmButton.gameObject.SetActive(false);
+        if (cancelButton != null) cancelButton.gameObject.SetActive(false);
+        if (dialoguePanel != null) dialoguePanel.SetActive(true);
+
+        if (playerController != null)
+        {
+            playerControllerWasEnabled = playerController.enabled;
+            playerController.enabled = false;
+
+            Rigidbody body = playerController.GetComponent<Rigidbody>();
+            if (body != null)
+                body.velocity = new Vector3(0f, body.velocity.y, 0f);
+
+            playerLookController = playerController.GetComponent<ThirdPersonCam>();
+            if (playerLookController != null)
+            {
+                playerLookControllerWasEnabled = playerLookController.enabled;
+                playerLookController.enabled = false;
+            }
+        }
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+        if (dialogueCamera != null)
+        {
+            previousCameraPriority = dialogueCamera.Priority;
+            dialogueCamera.Priority = 100;
+        }
+        RefreshDialogueLine();
+    }
+
+    private void Confirm()
+    {
+        if (lines == null) return;
+        if (lineIndex < lines.Count - 1)
+        {
+            lineIndex++;
+            RefreshDialogueLine();
+            return;
+        }
+        Action callback = confirmed;
+        CloseDialogue();
+        callback?.Invoke();
+    }
+
+    private void RefreshDialogueLine()
+    {
+        if (dialogueText != null) dialogueText.text = lines[lineIndex];
+        bool last = lineIndex == lines.Count - 1;
+        if (confirmButtonText != null) confirmButtonText.text = last ? finalConfirmLabel : "继续";
+        bool showChoices = last && showCancelOnLastLine;
+        if (confirmButton != null) confirmButton.gameObject.SetActive(showChoices);
+        if (cancelButton != null) cancelButton.gameObject.SetActive(showChoices);
+        if (continueHintText != null) continueHintText.gameObject.SetActive(!showChoices);
+        if (showChoices) SelectChoice(1);
+    }
+
+    private void SelectChoice(int choice)
+    {
+        selectedChoice = Mathf.Clamp(choice, 0, 1);
+        Button selected = selectedChoice == 0 ? cancelButton : confirmButton;
+        selected?.Select();
+        if (cancelButton != null)
+            cancelButton.image.color = selectedChoice == 0 ? new Color(0.95f, 0.68f, 0.22f, 1f) : new Color(0.22f, 0.20f, 0.18f, 0.95f);
+        if (confirmButton != null)
+            confirmButton.image.color = selectedChoice == 1 ? new Color(0.95f, 0.68f, 0.22f, 1f) : new Color(0.22f, 0.20f, 0.18f, 0.95f);
+    }
+
+    private void EnsureContinueHint()
+    {
+        if (continueHintText != null || dialoguePanel == null) return;
+        GameObject hint = new GameObject("ContinueHint", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+        hint.transform.SetParent(dialoguePanel.transform, false);
+        continueHintText = hint.GetComponent<TextMeshProUGUI>();
+        continueHintText.font = dialogueText != null ? dialogueText.font : null;
+        continueHintText.fontSize = 23f;
+        continueHintText.alignment = TextAlignmentOptions.BottomRight;
+        continueHintText.color = new Color(0.95f, 0.84f, 0.5f, 1f);
+        continueHintText.text = "[Space] / [Enter]  继续";
+        continueHintText.raycastTarget = false;
+        RectTransform rect = continueHintText.rectTransform;
+        rect.anchorMin = new Vector2(0.62f, 0f);
+        rect.anchorMax = new Vector2(1f, 0.3f);
+        rect.offsetMin = new Vector2(0f, 10f);
+        rect.offsetMax = new Vector2(-28f, 0f);
+    }
+
+    public void CloseDialogue()
+    {
+        if (dialogueCamera != null)
+            dialogueCamera.Priority = previousCameraPriority;
+        dialogueCamera = null;
+        if (playerController != null) playerController.enabled = playerControllerWasEnabled;
+        if (playerLookController != null)
+            playerLookController.enabled = playerLookControllerWasEnabled;
+        playerLookController = null;
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+        if (dialoguePanel != null) dialoguePanel.SetActive(false);
+        lines = null;
+        confirmed = null;
+        EventSystem.current?.SetSelectedGameObject(null);
+    }
+
+    private void OnDestroy()
+    {
+        if (Instance == this) Instance = null;
+    }
+}

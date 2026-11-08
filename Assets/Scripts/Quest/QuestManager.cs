@@ -5,6 +5,9 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public sealed class QuestManager : MonoBehaviour
 {
+    [Header("Game Start")]
+    [SerializeField] private QuestData startingQuest;
+
     private readonly Dictionary<string, QuestRuntime> quests = new Dictionary<string, QuestRuntime>();
     private InventorySystem inventory;
     private bool isTurningIn;
@@ -31,6 +34,8 @@ public sealed class QuestManager : MonoBehaviour
             return;
         }
         inventory.InventoryChanged += RefreshActiveQuests;
+        if (startingQuest != null)
+            AcceptQuest(startingQuest);
     }
 
     public QuestRuntime RegisterQuest(QuestData data)
@@ -39,7 +44,7 @@ public sealed class QuestManager : MonoBehaviour
         if (quests.TryGetValue(data.QuestId, out QuestRuntime existing)) return existing;
         QuestRuntime runtime = new QuestRuntime(data);
         quests.Add(data.QuestId, runtime);
-        QuestChanged?.Invoke(runtime);
+        NotifyChanged(runtime);
         return runtime;
     }
 
@@ -64,7 +69,7 @@ public sealed class QuestManager : MonoBehaviour
             return false;
         quest.State = QuestState.InProgress;
         EvaluateQuest(quest);
-        QuestChanged?.Invoke(quest);
+        NotifyChanged(quest);
         return true;
     }
 
@@ -86,7 +91,7 @@ public sealed class QuestManager : MonoBehaviour
             }
             if (!changed) continue;
             EvaluateQuest(quest);
-            QuestChanged?.Invoke(quest);
+            NotifyChanged(quest);
         }
     }
 
@@ -101,7 +106,7 @@ public sealed class QuestManager : MonoBehaviour
             if (!inventory.HasItem(item.Key, item.Value))
             {
                 quest.State = QuestState.InProgress;
-                QuestChanged?.Invoke(quest);
+                NotifyChanged(quest);
                 return false;
             }
         }
@@ -111,7 +116,7 @@ public sealed class QuestManager : MonoBehaviour
             inventory.RemoveItem(item.Key, item.Value);
         isTurningIn = false;
         quest.State = QuestState.Completed;
-        QuestChanged?.Invoke(quest);
+        NotifyChanged(quest);
         return true;
     }
 
@@ -134,7 +139,7 @@ public sealed class QuestManager : MonoBehaviour
         {
             if (quest.State != QuestState.InProgress && quest.State != QuestState.ReadyToTurnIn) continue;
             EvaluateQuest(quest);
-            QuestChanged?.Invoke(quest);
+            NotifyChanged(quest);
         }
     }
 
@@ -167,6 +172,12 @@ public sealed class QuestManager : MonoBehaviour
             else totals.Add(data.Item, data.RequiredAmount);
         }
         return totals;
+    }
+
+    private void NotifyChanged(QuestRuntime quest)
+    {
+        QuestChanged?.Invoke(quest);
+        QuestUI.Instance?.ShowQuest(quest, this);
     }
 
     private void OnDestroy()

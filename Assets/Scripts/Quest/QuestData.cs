@@ -40,6 +40,16 @@ public enum QuestCompletionMode
     TurnInToNpc
 }
 
+[System.Serializable]
+public sealed class QuestDialogue
+{
+    [SerializeField] private string speakerName = "吟游诗人";
+    [TextArea(2, 5)] [SerializeField] private List<string> lines = new List<string>();
+
+    public string SpeakerName => speakerName;
+    public IReadOnlyList<string> Lines => lines;
+}
+
 [CreateAssetMenu(fileName = "NewQuest", menuName = "Quest/Quest Data")]
 public sealed class QuestData : ScriptableObject
 {
@@ -60,10 +70,20 @@ public sealed class QuestData : ScriptableObject
     [FormerlySerializedAs("requiredItems")]
     [SerializeField] private List<QuestObjectiveData> objectives = new List<QuestObjectiveData>();
 
+    [Header("NPC Dialogue")]
+    [SerializeField] private QuestDialogue offerDialogue = new QuestDialogue();
+    [SerializeField] private QuestDialogue inProgressDialogue = new QuestDialogue();
+    [SerializeField] private QuestDialogue turnInDialogue = new QuestDialogue();
+    [SerializeField] private QuestDialogue completedDialogue = new QuestDialogue();
+
     public string QuestId => string.IsNullOrWhiteSpace(questId) ? name : questId;
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
     public string Description => description;
     public QuestCompletionMode CompletionMode => completionMode;
     public IReadOnlyList<QuestData> Prerequisites => prerequisites;
     public IReadOnlyList<QuestObjectiveData> Objectives => objectives;
+    public QuestDialogue OfferDialogue => offerDialogue;
+    public QuestDialogue InProgressDialogue => inProgressDialogue;
+    public QuestDialogue TurnInDialogue => turnInDialogue;
+    public QuestDialogue CompletedDialogue => completedDialogue;
 }

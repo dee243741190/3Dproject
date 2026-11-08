@@ -78,7 +78,11 @@ public class NearbyPickup : MonoBehaviour
     private void Start() //第一次 Update 前检查当前物品的玩家引用
     {
         if (player == null)
-            Debug.LogWarning("NearbyPickup: 请在 Inspector 中设置 Player。", this);
+        {
+            PlayerController controller = FindObjectOfType<PlayerController>();
+            if (controller != null) player = controller.transform;
+        }
+        SetInteractionVisible(false);
     }
 
     private void Update() //每帧选择最近目标并检测拾取输入
@@ -88,6 +92,7 @@ public class NearbyPickup : MonoBehaviour
         if (currentTarget == this
             && lastPickupFrame != Time.frameCount
             && !BackpackUIController.IsAnyBackpackOpen
+            && (QuestUI.Instance == null || !QuestUI.Instance.IsDialogueOpen)
             && Input.GetKeyDown(pickupKey)) //同一帧只能由当前最近的一个拾取物响应
         {
             lastPickupFrame = Time.frameCount; //先占用本帧输入，避免销毁后第二个物品接着响应

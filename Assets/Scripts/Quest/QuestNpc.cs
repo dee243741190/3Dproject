@@ -1,133 +1,192 @@
-using System;
 using System.Collections.Generic;
+using Cinemachine;
 using TMPro;
 using UnityEngine;
-using UnityEngine.Playables;
-
-[Serializable]
-public sealed class QuestNpcEntry
-{
-    [SerializeField] private QuestData quest;
-    [SerializeField] private DialogueData offerDialogue;
-    [SerializeField] private DialogueData inProgressDialogue;
-    [SerializeField] private DialogueData turnInDialogue;
-    [SerializeField] private DialogueData completedDialogue;
-    [Header("Optional camera Timelines")]
-    [SerializeField] private PlayableDirector offerTimeline;
-    [SerializeField] private PlayableDirector inProgressTimeline;
-    [SerializeField] private PlayableDirector turnInTimeline;
-    [SerializeField] private PlayableDirector completedTimeline;
-
-    public QuestData Quest => quest;
-    public DialogueData OfferDialogue => offerDialogue;
-    public DialogueData InProgressDialogue => inProgressDialogue;
-    public DialogueData TurnInDialogue => turnInDialogue;
-    public DialogueData CompletedDialogue => completedDialogue;
-    public PlayableDirector OfferTimeline => offerTimeline;
-    public PlayableDirector InProgressTimeline => inProgressTimeline;
-    public PlayableDirector TurnInTimeline => turnInTimeline;
-    public PlayableDirector CompletedTimeline => completedTimeline;
-}
 
 [DisallowMultipleComponent]
 public sealed class QuestNpc : MonoBehaviour
 {
-    [Header("Identity")]
-    [Tooltip("Unique ID used by TalkToNpc objectives, for example bard.")]
-    [SerializeField] private string npcId;
-
-    [Header("Quests (order is priority)")]
-    [SerializeField] private List<QuestNpcEntry> quests = new List<QuestNpcEntry>();
+    [Header("NPC")]
+    [SerializeField] private string npcId = "bard";
+    [SerializeField] private List<QuestData> quests = new List<QuestData>();
 
     [Header("Interaction")]
     [SerializeField] private Transform player;
     [Min(0.1f)] [SerializeField] private float interactionRange = 2.5f;
-    [SerializeField] private KeyCode interactionKey = KeyCode.E;
     [SerializeField] private TMP_Text interactionPrompt;
-    [SerializeField] private DialoguePanel dialoguePanel;
+
+    [Header("Dialogue camera (priority is raised while talking)")]
+    [SerializeField] private CinemachineVirtualCamera dialogueCamera;
+    [Tooltip("关闭时完全使用场景里 DialogueCamera 的手动位置和镜头参数。")]
+    [SerializeField] private bool autoPositionCamera;
+    [SerializeField] private float cameraDistance = 9f;
+    [SerializeField] private float cameraHeight = 0.8f;
+    [SerializeField] private float cameraLookHeight = 0.35f;
+    [Range(20f, 80f)] [SerializeField] private float cameraFieldOfView = 50f;
+
+    private Renderer[] npcRenderers;
+    private uint[] originalRenderingMasks;
+    private bool promptVisible;
 
     private void Start()
     {
-        if (QuestManager.Instance != null)
+        if (player == null)
         {
-            foreach (QuestNpcEntry entry in quests)
-                QuestManager.Instance.RegisterQuest(entry?.Quest);
+            PlayerController controller = FindObjectOfType<PlayerController>();
+            if (controller != null) player = controller.transform;
         }
-        SetPromptVisible(false);
+        foreach (QuestData quest in quests)
+            QuestManager.Instance?.RegisterQuest(quest);
+        CacheOutline();
+        EnsureInteractionPrompt();
+        SetPrompt(false);
     }
 
     private void Update()
     {
-        if (player == null || dialoguePanel == null) return;
+        if (player == null || QuestUI.Instance == null) return;
         bool nearby = Vector3.Distance(player.position, transform.position) <= interactionRange;
-        SetPromptVisible(nearby && !dialoguePanel.IsOpen);
-        if (nearby && !dialoguePanel.IsOpen && Input.GetKeyDown(interactionKey)) Interact();
+        SetPrompt(nearby && !QuestUI.Instance.IsDialogueOpen);
+        if (nearby && !QuestUI.Instance.IsDialogueOpen && Input.GetKeyDown(KeyCode.E))
+            Interact();
     }
 
-    public void Interact()
+    private void Interact()
     {
         QuestManager manager = QuestManager.Instance;
-        if (manager == null || dialoguePanel == null) return;
+        QuestUI ui = QuestUI.Instance;
+        QuestData quest = FindCurrentQuest(manager);
+        if (manager == null || ui == null || quest == null) return;
+        PositionDialogueCamera();
 
-        QuestNpcEntry entry = FindDialogueEntry(manager);
-        if (entry == null) return;
-        QuestState state = manager.GetState(entry.Quest);
-
+        QuestState state = manager.GetState(quest);
         if (state == QuestState.InProgress)
         {
             manager.ReportNpcTalk(npcId);
-            DialogueData dialogue = manager.GetState(entry.Quest) == QuestState.Completed
-                ? entry.CompletedDialogue : entry.InProgressDialogue;
-            PlayableDirector timeline = manager.GetState(entry.Quest) == QuestState.Completed
-                ? entry.CompletedTimeline : entry.InProgressTimeline;
-            dialoguePanel.Show(dialogue, "确定", "", null, null, false, timeline);
+            QuestDialogue dialogue = manager.GetState(quest) == QuestState.Completed
+                ? quest.CompletedDialogue : quest.InProgressDialogue;
+            ui.ShowDialogue(dialogue, "确定", false, null, dialogueCamera);
         }
         else if (state == QuestState.ReadyToTurnIn)
         {
-            dialoguePanel.Show(entry.TurnInDialogue, "交付", "取消",
-                () => manager.TurnInQuest(entry.Quest), null, true, entry.TurnInTimeline);
+            ui.ShowDialogue(quest.TurnInDialogue, "交付", true,
+                () => manager.TurnInQuest(quest), dialogueCamera);
         }
         else if (state == QuestState.Available)
         {
-            dialoguePanel.Show(entry.OfferDialogue, "接受", "取消",
-                () => manager.AcceptQuest(entry.Quest), null, true, entry.OfferTimeline);
+            ui.ShowDialogue(quest.OfferDialogue, "接受", true,
+                () => manager.AcceptQuest(quest), dialogueCamera);
         }
         else
         {
-            dialoguePanel.Show(entry.CompletedDialogue, "确定", "", null, null, false,
-                entry.CompletedTimeline);
+            ui.ShowDialogue(quest.CompletedDialogue, "确定", false, null, dialogueCamera);
         }
     }
 
-    private QuestNpcEntry FindDialogueEntry(QuestManager manager)
+    private QuestData FindCurrentQuest(QuestManager manager)
     {
-        foreach (QuestNpcEntry entry in quests)
+        if (manager == null) return null;
+        foreach (QuestData quest in quests)
         {
-            if (entry?.Quest == null) continue;
-            QuestState state = manager.GetState(entry.Quest);
-            if (state == QuestState.InProgress || state == QuestState.ReadyToTurnIn) return entry;
+            QuestState state = manager.GetState(quest);
+            if (state == QuestState.InProgress || state == QuestState.ReadyToTurnIn) return quest;
         }
-        foreach (QuestNpcEntry entry in quests)
+        foreach (QuestData quest in quests)
         {
-            if (entry?.Quest != null && manager.GetState(entry.Quest) == QuestState.Available &&
-                manager.ArePrerequisitesCompleted(entry.Quest)) return entry;
+            if (manager.GetState(quest) == QuestState.Available && manager.ArePrerequisitesCompleted(quest))
+                return quest;
         }
         for (int i = quests.Count - 1; i >= 0; i--)
         {
-            if (quests[i]?.Quest != null && manager.GetState(quests[i].Quest) == QuestState.Completed)
-                return quests[i];
+            if (manager.GetState(quests[i]) == QuestState.Completed) return quests[i];
         }
         return null;
     }
 
-    private void SetPromptVisible(bool visible)
+    private void SetPrompt(bool visible)
     {
+        if (promptVisible == visible) return;
+        promptVisible = visible;
+        uint outlineBit = 1u << 1;
+        for (int i = 0; i < npcRenderers.Length; i++)
+        {
+            if (npcRenderers[i] != null)
+                npcRenderers[i].renderingLayerMask = visible
+                    ? originalRenderingMasks[i] | outlineBit
+                    : originalRenderingMasks[i] & ~outlineBit;
+        }
         if (interactionPrompt != null) interactionPrompt.gameObject.SetActive(visible);
+    }
+
+    private void LateUpdate()
+    {
+        if (!promptVisible || interactionPrompt == null || Camera.main == null) return;
+        interactionPrompt.transform.rotation = Quaternion.LookRotation(
+            interactionPrompt.transform.position - Camera.main.transform.position,
+            Camera.main.transform.up);
+    }
+
+    private void CacheOutline()
+    {
+        npcRenderers = GetComponentsInChildren<Renderer>(true);
+        originalRenderingMasks = new uint[npcRenderers.Length];
+        for (int i = 0; i < npcRenderers.Length; i++)
+            originalRenderingMasks[i] = npcRenderers[i].renderingLayerMask;
+    }
+
+    // The NPC uses the same world-space TMP styling as the pickup prefabs.
+    private void EnsureInteractionPrompt()
+    {
+        if (interactionPrompt != null) return;
+        GameObject promptObject = new GameObject("Text (TMP)", typeof(TextMeshPro));
+        promptObject.transform.SetParent(transform, false);
+        promptObject.transform.localPosition = Vector3.up * 2.15f;
+        promptObject.transform.localScale = Vector3.one * 0.08f;
+        interactionPrompt = promptObject.GetComponent<TextMeshPro>();
+        interactionPrompt.font = QuestUI.Instance != null ? QuestUI.Instance.UiFont : interactionPrompt.font;
+        interactionPrompt.text = "E 对话";
+        interactionPrompt.fontSize = 30f;
+        interactionPrompt.alignment = TextAlignmentOptions.Center;
+        interactionPrompt.color = Color.white;
+        interactionPrompt.raycastTarget = true;
+        interactionPrompt.rectTransform.sizeDelta = new Vector2(20f, 5f);
+        promptObject.SetActive(false);
+    }
+
+    private void PositionDialogueCamera()
+    {
+        if (dialogueCamera == null || player == null || !autoPositionCamera)
+            return;
+
+        Vector3 npcFocus = transform.position + Vector3.up * 1.25f;
+        Vector3 playerFocus = player.position + Vector3.up * 1.25f;
+        Vector3 focusPoint = (npcFocus + playerFocus) * 0.5f;
+        Vector3 conversationDirection = npcFocus - playerFocus;
+        conversationDirection.y = 0f;
+        if (conversationDirection.sqrMagnitude < 0.01f)
+            conversationDirection = transform.forward;
+
+        Vector3 side = Vector3.Cross(Vector3.up, conversationDirection.normalized);
+
+        // Use the side closest to the current gameplay camera. This avoids an
+        // unnecessary 180-degree jump and gives a stable two-shot.
+        if (Camera.main != null)
+        {
+            Vector3 toGameplayCamera = Camera.main.transform.position - focusPoint;
+            if (Vector3.Dot(side, toGameplayCamera) < 0f)
+                side = -side;
+        }
+
+        dialogueCamera.m_Lens.FieldOfView = cameraFieldOfView;
+        dialogueCamera.transform.position = focusPoint + side * cameraDistance + Vector3.up * cameraHeight;
+        dialogueCamera.transform.rotation = Quaternion.LookRotation(
+            focusPoint + Vector3.up * cameraLookHeight - dialogueCamera.transform.position,
+            Vector3.up);
     }
 
     private void OnDrawGizmosSelected()
     {
-        Gizmos.color = new Color(0.35f, 0.8f, 1f, 0.85f);
+        Gizmos.color = Color.cyan;
         Gizmos.DrawWireSphere(transform.position, interactionRange);
     }
 }
