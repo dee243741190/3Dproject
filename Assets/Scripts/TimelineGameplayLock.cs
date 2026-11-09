@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Playables;
 
 /// <summary>
 /// Hides selected UI at scene start, then fades it in after a manual delay.
@@ -9,9 +10,12 @@ using UnityEngine;
 public sealed class TimelineGameplayLock : MonoBehaviour
 {
     [Header("UI timing")]
-    [Tooltip("How many seconds the selected UI stays hidden after the scene starts.")]
+    [Tooltip("Optional Timeline to wait for. When empty, the PlayableDirector on this object is used.")]
+    [SerializeField] private PlayableDirector introTimeline;
+
+    [Tooltip("Fallback delay used only when there is no Timeline to wait for.")]
     [Min(0f)]
-    [SerializeField] private float lockDurationSeconds = 5f;
+    [SerializeField] private float lockDurationSeconds;
 
     [Tooltip("Drag the UI objects that should be hidden and later shown here.")]
     [SerializeField] private GameObject[] uiObjectsToFadeIn;
@@ -24,12 +28,22 @@ public sealed class TimelineGameplayLock : MonoBehaviour
 
     private void Awake()
     {
+        if (introTimeline == null)
+            introTimeline = GetComponent<PlayableDirector>();
         PrepareUi();
     }
 
     private IEnumerator Start()
     {
-        if (lockDurationSeconds > 0f)
+        if (introTimeline != null)
+        {
+            // Play On Awake is started before this coroutine reaches its first
+            // frame. Follow the real sequence instead of guessing its length.
+            yield return null;
+            while (introTimeline.state == PlayState.Playing)
+                yield return null;
+        }
+        else if (lockDurationSeconds > 0f)
             yield return new WaitForSecondsRealtime(lockDurationSeconds);
 
         if (uiFadeDuration <= 0f)

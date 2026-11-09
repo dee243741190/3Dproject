@@ -43,7 +43,7 @@ public enum QuestCompletionMode
 [System.Serializable]
 public sealed class QuestDialogue
 {
-    [SerializeField] private string speakerName = "吟游诗人";
+    [SerializeField] private string speakerName = "NPC";
     [TextArea(2, 5)] [SerializeField] private List<string> lines = new List<string>();
 
     public string SpeakerName => speakerName;
@@ -60,6 +60,8 @@ public sealed class QuestData : ScriptableObject
     [Header("Presentation")]
     [TextArea(2, 6)]
     [SerializeField] private string description;
+    [Tooltip("Text shown after all objectives are complete and the quest must be turned in.")]
+    [SerializeField] private string readyToTurnInText = "返回任务发布者处交付";
 
     [Header("Flow")]
     [SerializeField] private QuestCompletionMode completionMode = QuestCompletionMode.TurnInToNpc;
@@ -79,6 +81,9 @@ public sealed class QuestData : ScriptableObject
     public string QuestId => string.IsNullOrWhiteSpace(questId) ? name : questId;
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
     public string Description => description;
+    public string ReadyToTurnInText => string.IsNullOrWhiteSpace(readyToTurnInText)
+        ? "返回任务发布者处交付"
+        : readyToTurnInText;
     public QuestCompletionMode CompletionMode => completionMode;
     public IReadOnlyList<QuestData> Prerequisites => prerequisites;
     public IReadOnlyList<QuestObjectiveData> Objectives => objectives;

@@ -1,16 +1,19 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Playables;
 
 [DisallowMultipleComponent]
 public sealed class QuestManager : MonoBehaviour
 {
     [Header("Game Start")]
     [SerializeField] private QuestData startingQuest;
+    [SerializeField] private PlayableDirector introTimeline;
 
     private readonly Dictionary<string, QuestRuntime> quests = new Dictionary<string, QuestRuntime>();
     private InventorySystem inventory;
     private bool isTurningIn;
+    private bool startingQuestAccepted;
 
     public static QuestManager Instance { get; private set; }
     public event Action<QuestRuntime> QuestChanged;
@@ -34,8 +37,31 @@ public sealed class QuestManager : MonoBehaviour
             return;
         }
         inventory.InventoryChanged += RefreshActiveQuests;
-        if (startingQuest != null)
-            AcceptQuest(startingQuest);
+
+        if (startingQuest == null)
+            return;
+
+        // The opening Timeline is started automatically by Unity before Start.
+        // Keep the initial objective hidden until that sequence has finished.
+        if (introTimeline != null && introTimeline.state == PlayState.Playing)
+            introTimeline.stopped += OnIntroTimelineStopped;
+        else
+            AcceptStartingQuest();
+    }
+
+    private void OnIntroTimelineStopped(PlayableDirector director)
+    {
+        if (introTimeline != null)
+            introTimeline.stopped -= OnIntroTimelineStopped;
+        AcceptStartingQuest();
+    }
+
+    private void AcceptStartingQuest()
+    {
+        if (startingQuestAccepted || startingQuest == null)
+            return;
+        startingQuestAccepted = true;
+        AcceptQuest(startingQuest);
     }
 
     public QuestRuntime RegisterQuest(QuestData data)
@@ -182,6 +208,8 @@ public sealed class QuestManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (introTimeline != null)
+            introTimeline.stopped -= OnIntroTimelineStopped;
         if (inventory != null) inventory.InventoryChanged -= RefreshActiveQuests;
         if (Instance == this) Instance = null;
     }

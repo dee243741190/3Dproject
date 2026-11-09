@@ -10,6 +10,12 @@ public sealed class QuestNpc : MonoBehaviour
     [SerializeField] private string npcId = "bard";
     [SerializeField] private List<QuestData> quests = new List<QuestData>();
 
+    [Header("Dialogue Labels")]
+    [SerializeField] private string acceptLabel = "接受";
+    [SerializeField] private string turnInLabel = "交付";
+    [SerializeField] private string continueLabel = "继续";
+    [SerializeField] private string closeLabel = "确定";
+
     [Header("Interaction")]
     [SerializeField] private Transform player;
     [Min(0.1f)] [SerializeField] private float interactionRange = 2.5f;
@@ -60,43 +66,60 @@ public sealed class QuestNpc : MonoBehaviour
         {
             manager.ReportNpcTalk(npcId);
             if (manager.GetState(quest) == QuestState.Completed)
-            {
-                QuestData nextQuest = FindNextAvailableQuest(manager, quest);
-                if (nextQuest != null)
-                {
-                    ui.ShowDialogue(quest.CompletedDialogue, "继续", false,
-                        () => ShowQuestOffer(nextQuest, manager, ui), dialogueCamera, true);
-                }
-                else
-                {
-                    ui.ShowDialogue(quest.CompletedDialogue, "确定", false, null, dialogueCamera);
-                }
-            }
+                ShowCompletedDialogueAndNextQuest(quest, manager, ui);
             else
             {
-                ui.ShowDialogue(quest.InProgressDialogue, "确定", false, null, dialogueCamera);
+                ui.ShowDialogue(quest.InProgressDialogue, closeLabel, false, null, dialogueCamera);
             }
         }
         else if (state == QuestState.ReadyToTurnIn)
         {
-            ui.ShowDialogue(quest.TurnInDialogue, "交付", true,
-                () => manager.TurnInQuest(quest), dialogueCamera);
+            ui.ShowDialogue(quest.TurnInDialogue, turnInLabel, true,
+                () => CompleteQuestAndContinue(quest, manager, ui), dialogueCamera, true);
         }
         else if (state == QuestState.Available)
         {
-            ui.ShowDialogue(quest.OfferDialogue, "接受", true,
+            ui.ShowDialogue(quest.OfferDialogue, acceptLabel, true,
                 () => manager.AcceptQuest(quest), dialogueCamera);
         }
         else
         {
-            ui.ShowDialogue(quest.CompletedDialogue, "确定", false, null, dialogueCamera);
+            ui.ShowDialogue(quest.CompletedDialogue, closeLabel, false, null, dialogueCamera);
         }
     }
 
     private void ShowQuestOffer(QuestData quest, QuestManager manager, QuestUI ui)
     {
-        ui.ShowDialogue(quest.OfferDialogue, "接受", true,
+        ui.ShowDialogue(quest.OfferDialogue, acceptLabel, true,
             () => manager.AcceptQuest(quest), dialogueCamera);
+    }
+
+    private void CompleteQuestAndContinue(QuestData quest, QuestManager manager, QuestUI ui)
+    {
+        if (!manager.TurnInQuest(quest))
+        {
+            ui.CloseDialogue();
+            return;
+        }
+
+        ShowCompletedDialogueAndNextQuest(quest, manager, ui);
+    }
+
+    private void ShowCompletedDialogueAndNextQuest(
+        QuestData quest,
+        QuestManager manager,
+        QuestUI ui)
+    {
+        QuestData nextQuest = FindNextAvailableQuest(manager, quest);
+        if (nextQuest != null)
+        {
+            ui.ShowDialogue(quest.CompletedDialogue, continueLabel, false,
+                () => ShowQuestOffer(nextQuest, manager, ui), dialogueCamera, true);
+        }
+        else
+        {
+            ui.ShowDialogue(quest.CompletedDialogue, closeLabel, false, null, dialogueCamera);
+        }
     }
 
     private QuestData FindNextAvailableQuest(QuestManager manager, QuestData completedQuest)

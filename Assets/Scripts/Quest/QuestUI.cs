@@ -25,7 +25,7 @@ public sealed class QuestUI : MonoBehaviour
     [Header("Choice Buttons")]
     [SerializeField] private Button confirmButton;
     [SerializeField] private Button cancelButton;
-    [SerializeField] private Sprite normalButtonSprite;
+    [Tooltip("Overlay image shown only on the currently selected button.")]
     [SerializeField] private Sprite selectedButtonSprite;
 
     [Header("Optional")]
@@ -42,6 +42,9 @@ public sealed class QuestUI : MonoBehaviour
     private bool showCancelOnLastLine;
     private bool keepOpenAfterConfirm;
     private int selectedChoice = 1;
+    private int inputBlockedThroughFrame = -1;
+    private Image confirmSelectionMarker;
+    private Image cancelSelectionMarker;
 
     public static QuestUI Instance { get; private set; }
     public bool IsDialogueOpen => dialoguePanel != null && dialoguePanel.activeSelf;
@@ -52,6 +55,14 @@ public sealed class QuestUI : MonoBehaviour
         Instance = this;
         confirmButton?.onClick.AddListener(Confirm);
         cancelButton?.onClick.AddListener(CloseDialogue);
+        PrepareChoiceButton(confirmButton, ref confirmSelectionMarker);
+        PrepareChoiceButton(cancelButton, ref cancelSelectionMarker);
+        if (taskCanvasGroup != null)
+        {
+            taskCanvasGroup.alpha = 0f;
+            taskCanvasGroup.interactable = false;
+            taskCanvasGroup.blocksRaycasts = false;
+        }
         if (taskPanel != null) taskPanel.SetActive(false);
         if (dialoguePanel != null) dialoguePanel.SetActive(false);
     }
@@ -78,10 +89,11 @@ public sealed class QuestUI : MonoBehaviour
                 SelectChoice(0);
             else if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D))
                 SelectChoice(1);
-            else if (Input.GetKeyDown(KeyCode.E) ||
-                     Input.GetKeyDown(KeyCode.Space) ||
-                     Input.GetKeyDown(KeyCode.Return) ||
-                     Input.GetKeyDown(KeyCode.KeypadEnter))
+            // Space/Return are already submitted by Unity's selected Button.
+            // Handling them here as well would confirm twice in one frame: the
+            // first confirmation opens the chained dialogue and the second one
+            // immediately closes it.
+            else if (Input.GetKeyDown(KeyCode.E))
             {
                 if (selectedChoice == 0) CloseDialogue();
                 else Confirm();
@@ -99,7 +111,8 @@ public sealed class QuestUI : MonoBehaviour
 
     private void UpdateTaskFade()
     {
-        if (taskCanvasGroup == null) return;
+        if (taskCanvasGroup == null || taskPanel == null || !taskPanel.activeSelf)
+            return;
         float targetAlpha = BackpackUIController.IsAnyBackpackOpen ? 0f : 1f;
         float speed = 1f / Mathf.Max(0.05f, taskFadeDuration);
         taskCanvasGroup.alpha = Mathf.MoveTowards(
@@ -114,14 +127,32 @@ public sealed class QuestUI : MonoBehaviour
     public void ShowQuest(QuestRuntime quest, QuestManager manager)
     {
         if (quest == null || quest.State == QuestState.Available) return;
-        if (taskPanel != null) taskPanel.SetActive(quest.State != QuestState.Completed);
-        if (quest.State == QuestState.Completed) return;
+        if (quest.State == QuestState.Completed)
+        {
+            if (taskPanel != null) taskPanel.SetActive(false);
+            if (taskCanvasGroup != null) taskCanvasGroup.alpha = 0f;
+            return;
+        }
+
+        if (taskPanel != null && !taskPanel.activeSelf)
+        {
+            // Always start a newly displayed task from transparent. Only this
+            // component owns the task CanvasGroup, avoiding startup-order races.
+            if (taskCanvasGroup != null)
+            {
+                taskCanvasGroup.alpha = 0f;
+                taskCanvasGroup.interactable = false;
+                taskCanvasGroup.blocksRaycasts = false;
+            }
+            taskPanel.SetActive(true);
+        }
         if (taskText == null) return;
 
         if (quest.State == QuestState.ReadyToTurnIn)
         {
             taskText.text = "<color=#F3D78A><b>" + quest.Data.DisplayName +
-                "</b></color>\n<color=#FFFFFF><size=24>返回任务发布者处交付</size></color>";
+                "</b></color>\n<color=#FFFFFF><size=24>" +
+                quest.Data.ReadyToTurnInText + "</size></color>";
             return;
         }
 
@@ -154,7 +185,17 @@ public sealed class QuestUI : MonoBehaviour
         dialogueCamera = camera;
         showCancelOnLastLine = showCancel;
         keepOpenAfterConfirm = keepOpen;
+        // The key/button event that opened this dialogue can still be propagating.
+        // Block every confirmation path for the rest of this frame so a chained
+        // dialogue cannot be opened and immediately closed by the same input.
+        inputBlockedThroughFrame = Time.frameCount;
         if (speakerNameText != null) speakerNameText.text = dialogue.SpeakerName;
+        if (confirmButton != null)
+        {
+            TMP_Text label = confirmButton.GetComponentInChildren<TMP_Text>(true);
+            if (label != null && !string.IsNullOrWhiteSpace(confirmLabel))
+                label.text = confirmLabel;
+        }
         if (confirmButton != null) confirmButton.gameObject.SetActive(false);
         if (cancelButton != null) cancelButton.gameObject.SetActive(false);
         if (dialoguePanel != null) dialoguePanel.SetActive(true);
@@ -190,6 +231,8 @@ public sealed class QuestUI : MonoBehaviour
 
     private void Confirm()
     {
+        if (Time.frameCount <= inputBlockedThroughFrame)
+            return;
         if (lines == null) return;
         if (lineIndex < lines.Count - 1)
         {
@@ -233,10 +276,48 @@ public sealed class QuestUI : MonoBehaviour
 
     private void SetButtonVisual(Button button, bool selected)
     {
-        if (button == null || button.image == null) return;
-        Sprite sprite = selected ? selectedButtonSprite : normalButtonSprite;
-        if (sprite != null) button.image.sprite = sprite;
-        button.image.color = Color.white;
+        if (button == null) return;
+
+        // Keep the normal button artwork as the base. The selected artwork is
+        // a separate marker layered above it instead of replacing the base.
+        Image marker = button == confirmButton
+            ? confirmSelectionMarker
+            : cancelSelectionMarker;
+        if (marker != null)
+            marker.gameObject.SetActive(selected && selectedButtonSprite != null);
+    }
+
+    private void PrepareChoiceButton(Button button, ref Image marker)
+    {
+        if (button == null) return;
+
+        Transform existing = button.transform.Find("SelectionMarker");
+        if (existing != null)
+            marker = existing.GetComponent<Image>();
+
+        if (marker == null)
+        {
+            GameObject markerObject = new GameObject(
+                "SelectionMarker",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
+            markerObject.transform.SetParent(button.transform, false);
+            marker = markerObject.GetComponent<Image>();
+
+            RectTransform rect = marker.rectTransform;
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+        }
+
+        marker.sprite = selectedButtonSprite;
+        marker.color = Color.white;
+        marker.preserveAspect = true;
+        marker.raycastTarget = false;
+        marker.transform.SetAsLastSibling();
+        marker.gameObject.SetActive(false);
     }
 
     public void CloseDialogue()
