@@ -24,21 +24,17 @@ public sealed class QuestNpc : MonoBehaviour
     [SerializeField] private float cameraLookHeight = 0.35f;
     [Range(20f, 80f)] [SerializeField] private float cameraFieldOfView = 50f;
 
-    private Renderer[] npcRenderers;
-    private uint[] originalRenderingMasks;
     private bool promptVisible;
+    private bool promptInitialized;
 
     private void Start()
     {
         if (player == null)
-        {
-            PlayerController controller = FindObjectOfType<PlayerController>();
-            if (controller != null) player = controller.transform;
-        }
+            Debug.LogWarning("QuestNpc: 请在 Inspector 中设置 Player。", this);
         foreach (QuestData quest in quests)
             QuestManager.Instance?.RegisterQuest(quest);
-        CacheOutline();
-        EnsureInteractionPrompt();
+        if (interactionPrompt == null)
+            Debug.LogWarning("QuestNpc: 请在 Inspector 中设置 Interaction Prompt。", this);
         SetPrompt(false);
     }
 
@@ -63,9 +59,23 @@ public sealed class QuestNpc : MonoBehaviour
         if (state == QuestState.InProgress)
         {
             manager.ReportNpcTalk(npcId);
-            QuestDialogue dialogue = manager.GetState(quest) == QuestState.Completed
-                ? quest.CompletedDialogue : quest.InProgressDialogue;
-            ui.ShowDialogue(dialogue, "确定", false, null, dialogueCamera);
+            if (manager.GetState(quest) == QuestState.Completed)
+            {
+                QuestData nextQuest = FindNextAvailableQuest(manager, quest);
+                if (nextQuest != null)
+                {
+                    ui.ShowDialogue(quest.CompletedDialogue, "继续", false,
+                        () => ShowQuestOffer(nextQuest, manager, ui), dialogueCamera, true);
+                }
+                else
+                {
+                    ui.ShowDialogue(quest.CompletedDialogue, "确定", false, null, dialogueCamera);
+                }
+            }
+            else
+            {
+                ui.ShowDialogue(quest.InProgressDialogue, "确定", false, null, dialogueCamera);
+            }
         }
         else if (state == QuestState.ReadyToTurnIn)
         {
@@ -81,6 +91,23 @@ public sealed class QuestNpc : MonoBehaviour
         {
             ui.ShowDialogue(quest.CompletedDialogue, "确定", false, null, dialogueCamera);
         }
+    }
+
+    private void ShowQuestOffer(QuestData quest, QuestManager manager, QuestUI ui)
+    {
+        ui.ShowDialogue(quest.OfferDialogue, "接受", true,
+            () => manager.AcceptQuest(quest), dialogueCamera);
+    }
+
+    private QuestData FindNextAvailableQuest(QuestManager manager, QuestData completedQuest)
+    {
+        foreach (QuestData quest in quests)
+        {
+            if (quest == null || quest == completedQuest) continue;
+            if (manager.GetState(quest) == QuestState.Available && manager.ArePrerequisitesCompleted(quest))
+                return quest;
+        }
+        return null;
     }
 
     private QuestData FindCurrentQuest(QuestManager manager)
@@ -105,16 +132,9 @@ public sealed class QuestNpc : MonoBehaviour
 
     private void SetPrompt(bool visible)
     {
-        if (promptVisible == visible) return;
+        if (promptInitialized && promptVisible == visible) return;
+        promptInitialized = true;
         promptVisible = visible;
-        uint outlineBit = 1u << 1;
-        for (int i = 0; i < npcRenderers.Length; i++)
-        {
-            if (npcRenderers[i] != null)
-                npcRenderers[i].renderingLayerMask = visible
-                    ? originalRenderingMasks[i] | outlineBit
-                    : originalRenderingMasks[i] & ~outlineBit;
-        }
         if (interactionPrompt != null) interactionPrompt.gameObject.SetActive(visible);
     }
 
@@ -124,33 +144,6 @@ public sealed class QuestNpc : MonoBehaviour
         interactionPrompt.transform.rotation = Quaternion.LookRotation(
             interactionPrompt.transform.position - Camera.main.transform.position,
             Camera.main.transform.up);
-    }
-
-    private void CacheOutline()
-    {
-        npcRenderers = GetComponentsInChildren<Renderer>(true);
-        originalRenderingMasks = new uint[npcRenderers.Length];
-        for (int i = 0; i < npcRenderers.Length; i++)
-            originalRenderingMasks[i] = npcRenderers[i].renderingLayerMask;
-    }
-
-    // The NPC uses the same world-space TMP styling as the pickup prefabs.
-    private void EnsureInteractionPrompt()
-    {
-        if (interactionPrompt != null) return;
-        GameObject promptObject = new GameObject("Text (TMP)", typeof(TextMeshPro));
-        promptObject.transform.SetParent(transform, false);
-        promptObject.transform.localPosition = Vector3.up * 2.15f;
-        promptObject.transform.localScale = Vector3.one * 0.08f;
-        interactionPrompt = promptObject.GetComponent<TextMeshPro>();
-        interactionPrompt.font = QuestUI.Instance != null ? QuestUI.Instance.UiFont : interactionPrompt.font;
-        interactionPrompt.text = "E 对话";
-        interactionPrompt.fontSize = 30f;
-        interactionPrompt.alignment = TextAlignmentOptions.Center;
-        interactionPrompt.color = Color.white;
-        interactionPrompt.raycastTarget = true;
-        interactionPrompt.rectTransform.sizeDelta = new Vector2(20f, 5f);
-        promptObject.SetActive(false);
     }
 
     private void PositionDialogueCamera()

@@ -21,6 +21,8 @@ public class NearbyPickup : MonoBehaviour
     private static NearbyPickup currentTarget; //当前距离玩家最近、真正可以交互的拾取物
     private static int lastSelectionFrame = -1; //上一次选择目标的帧数，防止一帧重复计算
     private static int lastPickupFrame = -1; //同一次按键所在帧最多只能拾取一个物品
+    private static float nextSelectionTime; //拾取目标不需要每一帧都做全场扫描
+    private const float SelectionInterval = 0.08f; //约每秒检测 12 次，交互感觉不受影响
 
     [Header("Detection")] 
     [Tooltip("不指定时，会自动寻找挂有 PlayerController 的物体。")]
@@ -60,6 +62,7 @@ public class NearbyPickup : MonoBehaviour
         currentTarget = null; //清空当前目标
         lastSelectionFrame = -1; //重置上一帧参数
         lastPickupFrame = -1; //重置拾取输入记录
+        nextSelectionTime = 0f;
     }
 
     private void Awake() //物品初始化时缓存组件并关闭初始交互效果
@@ -78,10 +81,7 @@ public class NearbyPickup : MonoBehaviour
     private void Start() //第一次 Update 前检查当前物品的玩家引用
     {
         if (player == null)
-        {
-            PlayerController controller = FindObjectOfType<PlayerController>();
-            if (controller != null) player = controller.transform;
-        }
+            Debug.LogWarning("NearbyPickup: 请在 Inspector 中设置 Player。", this);
         SetInteractionVisible(false);
     }
 
@@ -162,6 +162,9 @@ public class NearbyPickup : MonoBehaviour
             return;
 
         lastSelectionFrame = Time.frameCount; //标记当前帧已经执行过选择
+        if (Time.unscaledTime < nextSelectionTime)
+            return;
+        nextSelectionTime = Time.unscaledTime + SelectionInterval;
         NearbyPickup nearest = null; //开始时还没有找到目标
         float nearestDistance = float.PositiveInfinity; //初始为正无穷，任何正常距离都更小
 
