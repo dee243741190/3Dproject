@@ -15,6 +15,7 @@ MonoBehaviour:
   questId: find_bard
   displayName: "\u5BFB\u627E\u541F\u6E38\u8BD7\u4EBA"
   description: "\u524D\u5F80\u6751\u5E84\uFF0C\u627E\u5230\u51C6\u5907\u591C\u665A\u6F14\u51FA\u7684\u541F\u6E38\u8BD7\u4EBA\u3002"
+  readyToTurnInText: "\u8FD4\u56DE\u4EFB\u52A1\u53D1\u5E03\u8005\u5904\u4EA4\u4ED8"
   completionMode: 0
   prerequisites: []
   objectives:
@@ -25,13 +26,14 @@ MonoBehaviour:
     targetId: bard
     requiredAmount: 1
     consumeOnTurnIn: 0
+  rewardItem: {fileID: 0}
+  rewardQuantity: 1
   offerDialogue:
     speakerName: "\u541F\u6E38\u8BD7\u4EBA"
     lines: []
   inProgressDialogue:
     speakerName: "\u541F\u6E38\u8BD7\u4EBA"
-    lines:
-    - "\u6B22\u8FCE\u6765\u5230\u6751\u5E84\uFF0C\u65C5\u884C\u8005\u3002\u4ECA\u665A\u6211\u6B63\u51C6\u5907\u4E3E\u884C\u4E00\u573A\u6F14\u51FA\u3002"
+    lines: []
   turnInDialogue:
     speakerName: "\u541F\u6E38\u8BD7\u4EBA"
     lines: []

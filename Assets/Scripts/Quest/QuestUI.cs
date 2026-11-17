@@ -1,10 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using Cinemachine;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 [DisallowMultipleComponent]
@@ -12,7 +14,9 @@ public sealed class QuestUI : MonoBehaviour
 {
     [Header("Task UI")]
     [SerializeField] private GameObject taskPanel;
-    [SerializeField] private TMP_Text taskText;
+    [SerializeField] private TMP_Text taskTitleText;
+    [FormerlySerializedAs("taskText")]
+    [SerializeField] private TMP_Text taskObjectiveText;
     [SerializeField] private CanvasGroup taskCanvasGroup;
     [Min(0.05f)] [SerializeField] private float taskFadeDuration = 0.25f;
 
@@ -30,6 +34,14 @@ public sealed class QuestUI : MonoBehaviour
 
     [Header("Optional")]
     [SerializeField] private Behaviour playerController;
+
+    [Header("Reward Notification / 获得道具提示")]
+    [SerializeField] private CanvasGroup rewardPanel;
+    [SerializeField] private Image rewardIcon;
+    [SerializeField] private TMP_Text rewardText;
+    [Min(0.1f)] [SerializeField] private float rewardDisplayDuration = 2.5f;
+    private readonly Queue<KeyValuePair<ItemData, int>> rewardQueue = new Queue<KeyValuePair<ItemData, int>>();
+    private bool showingRewards;
 
     private IReadOnlyList<string> lines;
     private int lineIndex;
@@ -53,6 +65,13 @@ public sealed class QuestUI : MonoBehaviour
     private void Awake()
     {
         Instance = this;
+        if (rewardPanel != null)
+        {
+            rewardPanel.alpha = 0f;
+            rewardPanel.interactable = false;
+            rewardPanel.blocksRaycasts = false;
+            rewardPanel.gameObject.SetActive(false);
+        }
         confirmButton?.onClick.AddListener(Confirm);
         cancelButton?.onClick.AddListener(CloseDialogue);
         PrepareChoiceButton(confirmButton, ref confirmSelectionMarker);
@@ -78,6 +97,8 @@ public sealed class QuestUI : MonoBehaviour
     private void Update()
     {
         UpdateTaskFade();
+        if (!showingRewards && rewardQueue.Count > 0 && rewardPanel != null)
+            StartCoroutine(ShowRewardQueue());
 
         if (!IsDialogueOpen || lines == null)
             return;
@@ -146,13 +167,11 @@ public sealed class QuestUI : MonoBehaviour
             }
             taskPanel.SetActive(true);
         }
-        if (taskText == null) return;
+        if (taskTitleText == null || taskObjectiveText == null) return;
 
         if (quest.State == QuestState.ReadyToTurnIn)
         {
-            taskText.text = "<color=#F3D78A><b>" + quest.Data.DisplayName +
-                "</b></color>\n<color=#FFFFFF><size=24>" +
-                quest.Data.ReadyToTurnInText + "</size></color>";
+            SetTaskText(quest.Data.DisplayName, quest.Data.ReadyToTurnInText);
             return;
         }
 
@@ -165,8 +184,13 @@ public sealed class QuestUI : MonoBehaviour
             if (data.Type == QuestObjectiveType.CollectItem)
                 text.Append(' ').Append(manager.GetObjectiveProgress(objective)).Append('/').Append(data.RequiredAmount);
         }
-        taskText.text = "<color=#F3D78A><b>" + quest.Data.DisplayName +
-            "</b></color>\n<color=#FFFFFF><size=24>" + text + "</size></color>";
+        SetTaskText(quest.Data.DisplayName, text.ToString());
+    }
+
+    private void SetTaskText(string title, string body)
+    {
+        taskTitleText.text = title;
+        taskObjectiveText.text = body;
     }
 
     public void ShowDialogue(
@@ -175,12 +199,13 @@ public sealed class QuestUI : MonoBehaviour
         bool showCancel,
         Action onConfirmed,
         CinemachineVirtualCameraBase camera,
-        bool keepOpen = false)
+        bool keepOpen = false,
+        bool startAtLastLine = false)
     {
         if (dialogue == null || dialogue.Lines.Count == 0) return;
         bool dialogueWasAlreadyOpen = IsDialogueOpen;
         lines = dialogue.Lines;
-        lineIndex = 0;
+        lineIndex = startAtLastLine ? dialogue.Lines.Count - 1 : 0;
         confirmed = onConfirmed;
         dialogueCamera = camera;
         showCancelOnLastLine = showCancel;
@@ -336,6 +361,55 @@ public sealed class QuestUI : MonoBehaviour
         confirmed = null;
         keepOpenAfterConfirm = false;
         EventSystem.current?.SetSelectedGameObject(null);
+    }
+
+    public void ShowReward(ItemData item, int quantity)
+    {
+        if (item != null && quantity > 0)
+            rewardQueue.Enqueue(new KeyValuePair<ItemData, int>(item, quantity));
+    }
+
+    private IEnumerator ShowRewardQueue()
+    {
+        showingRewards = true;
+        while (rewardQueue.Count > 0)
+        {
+            // 先让玩家读完 NPC 的赠礼对话，再显示获得提示。
+            while (IsDialogueOpen || BackpackUIController.IsAnyBackpackOpen)
+                yield return null;
+            var reward = rewardQueue.Dequeue();
+            if (rewardIcon != null)
+            {
+                rewardIcon.sprite = reward.Key.Icon;
+                rewardIcon.enabled = reward.Key.Icon != null;
+            }
+            if (rewardText != null)
+                rewardText.text = reward.Key.DisplayName + " × " + reward.Value;
+            rewardPanel.gameObject.SetActive(true);
+            float elapsed = 0f;
+            const float fade = 0.2f;
+            float duration = rewardDisplayDuration + fade * 2f;
+            while (elapsed < duration)
+            {
+                rewardPanel.alpha = Mathf.Clamp01(Mathf.Min(elapsed, duration - elapsed) / fade);
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            rewardPanel.alpha = 0f;
+            rewardPanel.gameObject.SetActive(false);
+        }
+        showingRewards = false;
+    }
+
+    private void OnDisable()
+    {
+        StopAllCoroutines();
+        showingRewards = false;
+        if (rewardPanel != null)
+        {
+            rewardPanel.alpha = 0f;
+            rewardPanel.gameObject.SetActive(false);
+        }
     }
 
     private void OnDestroy()

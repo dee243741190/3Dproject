@@ -72,6 +72,11 @@ public sealed class QuestData : ScriptableObject
     [FormerlySerializedAs("requiredItems")]
     [SerializeField] private List<QuestObjectiveData> objectives = new List<QuestObjectiveData>();
 
+    [Header("Item Reward / 道具奖励")]
+    [Tooltip("任务完成后发到背包；不填则没有道具奖励。")]
+    [SerializeField] private ItemData rewardItem;
+    [Min(1)] [SerializeField] private int rewardQuantity = 1;
+
     [Header("NPC Dialogue")]
     [SerializeField] private QuestDialogue offerDialogue = new QuestDialogue();
     [SerializeField] private QuestDialogue inProgressDialogue = new QuestDialogue();
@@ -85,6 +90,8 @@ public sealed class QuestData : ScriptableObject
         ? "返回任务发布者处交付"
         : readyToTurnInText;
     public QuestCompletionMode CompletionMode => completionMode;
+    public ItemData RewardItem => rewardItem;
+    public int RewardQuantity => Mathf.Max(1, rewardQuantity);
     public IReadOnlyList<QuestData> Prerequisites => prerequisites;
     public IReadOnlyList<QuestObjectiveData> Objectives => objectives;
     public QuestDialogue OfferDialogue => offerDialogue;

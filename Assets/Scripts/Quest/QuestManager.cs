@@ -1,22 +1,20 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Playables;
 
 [DisallowMultipleComponent]
 public sealed class QuestManager : MonoBehaviour
 {
     [Header("Game Start")]
     [SerializeField] private QuestData startingQuest;
-    [SerializeField] private PlayableDirector introTimeline;
 
     private readonly Dictionary<string, QuestRuntime> quests = new Dictionary<string, QuestRuntime>();
     private InventorySystem inventory;
     private bool isTurningIn;
     private bool startingQuestAccepted;
+    private bool rewardsNeedCheck;
 
     public static QuestManager Instance { get; private set; }
-    public event Action<QuestRuntime> QuestChanged;
 
     private void Awake()
     {
@@ -37,31 +35,16 @@ public sealed class QuestManager : MonoBehaviour
             return;
         }
         inventory.InventoryChanged += RefreshActiveQuests;
+        rewardsNeedCheck = true;
 
-        if (startingQuest == null)
-            return;
-
-        // The opening Timeline is started automatically by Unity before Start.
-        // Keep the initial objective hidden until that sequence has finished.
-        if (introTimeline != null && introTimeline.state == PlayState.Playing)
-            introTimeline.stopped += OnIntroTimelineStopped;
-        else
-            AcceptStartingQuest();
     }
 
-    private void OnIntroTimelineStopped(PlayableDirector director)
-    {
-        if (introTimeline != null)
-            introTimeline.stopped -= OnIntroTimelineStopped;
-        AcceptStartingQuest();
-    }
-
-    private void AcceptStartingQuest()
+    // 由主菜单在镜头交接完成、恢复操作时调用。
+    public void AcceptStartingQuest()
     {
         if (startingQuestAccepted || startingQuest == null)
             return;
-        startingQuestAccepted = true;
-        AcceptQuest(startingQuest);
+        startingQuestAccepted = AcceptQuest(startingQuest);
     }
 
     public QuestRuntime RegisterQuest(QuestData data)
@@ -160,6 +143,7 @@ public sealed class QuestManager : MonoBehaviour
 
     private void RefreshActiveQuests()
     {
+        rewardsNeedCheck = true;
         if (isTurningIn) return;
         foreach (QuestRuntime quest in quests.Values)
         {
@@ -202,14 +186,38 @@ public sealed class QuestManager : MonoBehaviour
 
     private void NotifyChanged(QuestRuntime quest)
     {
-        QuestChanged?.Invoke(quest);
+        if (quest.State == QuestState.Completed)
+            rewardsNeedCheck = true;
         QuestUI.Instance?.ShowQuest(quest, this);
+    }
+
+    // 完成和背包变化后检查一次。容量不足时保留奖励，等背包变化再补发。
+    private void LateUpdate()
+    {
+        if (!rewardsNeedCheck || inventory == null) return;
+        rewardsNeedCheck = false;
+        foreach (QuestRuntime quest in quests.Values)
+        {
+            if (quest.State != QuestState.Completed || quest.RewardGranted) continue;
+            ItemData item = quest.Data.RewardItem;
+            // 添加物品会同步触发背包事件，提前标记，避免重复发奖。
+            quest.RewardGranted = true;
+            if (item == null) continue;
+            if (inventory.TryAddItem(item, quest.Data.RewardQuantity))
+            {
+                QuestUI.Instance?.ShowReward(item, quest.Data.RewardQuantity);
+                Debug.Log($"任务奖励：{item.DisplayName} × {quest.Data.RewardQuantity}", this);
+            }
+            else
+            {
+                quest.RewardGranted = false;
+                Debug.Log($"背包空间不足：{quest.Data.DisplayName} 的奖励暂存，腾出空间后自动发放。", this);
+            }
+        }
     }
 
     private void OnDestroy()
     {
-        if (introTimeline != null)
-            introTimeline.stopped -= OnIntroTimelineStopped;
         if (inventory != null) inventory.InventoryChanged -= RefreshActiveQuests;
         if (Instance == this) Instance = null;
     }

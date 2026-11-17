@@ -27,6 +27,8 @@ MonoBehaviour:
     targetId: 
     requiredAmount: 5
     consumeOnTurnIn: 1
+  rewardItem: {fileID: 11400000, guid: b942bd9a2d27bbd409493213d72411a4, type: 2}
+  rewardQuantity: 1
   offerDialogue:
     speakerName: "\u541F\u6E38\u8BD7\u4EBA"
     lines:
@@ -44,3 +46,5 @@ MonoBehaviour:
     speakerName: "\u541F\u6E38\u8BD7\u4EBA"
     lines:
     - "\u8C22\u8C22\u4F60\uFF01\u4ECA\u665A\u7684\u6F14\u51FA\u4E00\u5B9A\u4F1A\u5F88\u7CBE\u5F69\u3002"
+    - "\u8FD9\u679A\u732B\u722A\u5FBD\u7AE0\u9001\u7ED9\u4F60\uFF0C\u7B97\u662F\u6211\u7684\u4E00\u70B9\u5FC3\u610F\u3002"
+    - "\u613F\u4F60\u4E00\u8DEF\u90FD\u6709\u597D\u6545\u4E8B\uFF0C\u4E5F\u6709\u597D\u6B4C\u76F8\u4F34\u3002"

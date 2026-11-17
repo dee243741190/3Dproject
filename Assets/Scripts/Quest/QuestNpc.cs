@@ -79,12 +79,13 @@ public sealed class QuestNpc : MonoBehaviour
         }
         else if (state == QuestState.Available)
         {
-            ui.ShowDialogue(quest.OfferDialogue, acceptLabel, true,
-                () => manager.AcceptQuest(quest), dialogueCamera);
+            ShowQuestOffer(quest, manager, ui);
         }
         else
         {
-            ui.ShowDialogue(quest.CompletedDialogue, closeLabel, false, null, dialogueCamera);
+            // 任务已经完成后再次交谈，只重复结束对话的最后一句。
+            ui.ShowDialogue(quest.CompletedDialogue, closeLabel, false, null,
+                dialogueCamera, false, true);
         }
     }
 

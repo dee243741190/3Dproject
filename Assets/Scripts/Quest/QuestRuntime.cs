@@ -23,5 +23,6 @@ public sealed class QuestRuntime
 
     public QuestData Data { get; }
     public QuestState State { get; internal set; }
+    public bool RewardGranted { get; internal set; }
     public List<QuestObjectiveRuntime> Objectives { get; }
 }

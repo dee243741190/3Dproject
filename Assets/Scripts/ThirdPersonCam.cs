@@ -10,13 +10,39 @@ public class ThirdPersonCam : MonoBehaviour
     public float rotationSpeed = 7f; //摄像机旋转速度
     PlayerController playerController;
 
-    IEnumerator Start()
+    void Awake()
     {
+        InitializeCamera();
+    }
+
+    private bool initialized;
+    private CinemachineFreeLook freeLook;
+    private string xInputName;
+    private string yInputName;
+
+    public void SetMouseInputEnabled(bool allowInput)
+    {
+        InitializeCamera();
+        if (freeLook == null) return;
+        freeLook.m_XAxis.Reset();
+        freeLook.m_YAxis.Reset();
+        freeLook.m_XAxis.m_InputAxisValue = 0f;
+        freeLook.m_YAxis.m_InputAxisValue = 0f;
+        freeLook.m_XAxis.m_InputAxisName = allowInput ? xInputName : string.Empty;
+        freeLook.m_YAxis.m_InputAxisName = allowInput ? yInputName : string.Empty;
+    }
+
+    public void InitializeCamera()
+    {
+        if (initialized) return;
         playerController = GetComponent<PlayerController>();
-        CinemachineFreeLook freeLook = FindObjectOfType<CinemachineFreeLook>();
+        freeLook = FindObjectOfType<CinemachineFreeLook>();
 
         if (freeLook == null)
-            yield break;
+            return;
+        initialized = true;
+        xInputName = freeLook.m_XAxis.m_InputAxisName;
+        yInputName = freeLook.m_YAxis.m_InputAxisName;
 
         //目的是让游戏开始时，摄像机方向和角色初始朝向基本一致
         freeLook.m_XAxis.m_InputAxisName = ""; //清空 Cinemachine 的输入轴名称，临时禁止鼠标控制摄像机
@@ -24,16 +50,11 @@ public class ThirdPersonCam : MonoBehaviour
         freeLook.m_XAxis.Value = playerObj.eulerAngles.y; //将摄像机的水平旋转值设置为角色模型的当前旋转角度
         freeLook.m_YAxis.Value = 0.5f; //将摄像机的垂直旋转值设置为中间位置（0.5 表示中间）
 
-        Cursor.lockState = CursorLockMode.Locked; //锁定鼠标光标，使其在游戏窗口内不可见并固定在屏幕中心
-        Cursor.visible = false; //隐藏鼠标光标
+        // 在启动时完成定位，不等到 Timeline 结束启用组件后再重置。
+        freeLook.UpdateCameraState(Vector3.up, -1f);
 
-        yield return null; //等待两帧，确保摄像机和角色的初始状态已经正确设置
-        yield return null;
-
-        freeLook.m_XAxis.Value = playerObj.eulerAngles.y; //再次设置摄像机角度
-        freeLook.m_YAxis.Value = 0.5f;
-        freeLook.m_XAxis.m_InputAxisName = "Mouse X"; //恢复 Cinemachine 的输入轴名称，使鼠标可以控制摄像机
-        freeLook.m_YAxis.m_InputAxisName = "Mouse Y";
+        freeLook.m_XAxis.m_InputAxisName = xInputName;
+        freeLook.m_YAxis.m_InputAxisName = yInputName;
     }
 
     void Update()
