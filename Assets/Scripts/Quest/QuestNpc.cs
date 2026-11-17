@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using Cinemachine;
 using TMPro;
@@ -21,6 +22,13 @@ public sealed class QuestNpc : MonoBehaviour
     [Min(0.1f)] [SerializeField] private float interactionRange = 2.5f;
     [SerializeField] private TMP_Text interactionPrompt;
 
+    [Header("Fixed Dialogue Staging")]
+    [Tooltip("玩家开始对话前会走到这个位置；不设置时直接开始对话。")]
+    [SerializeField] private Transform playerStandPoint;
+    [Min(0.1f)] [SerializeField] private float stagingMoveSpeed = 2.5f;
+    [Min(1f)] [SerializeField] private float stagingRotationSpeed = 540f;
+    [Min(0.01f)] [SerializeField] private float stagingStopDistance = 0.05f;
+
     [Header("Dialogue camera (priority is raised while talking)")]
     [SerializeField] private CinemachineVirtualCamera dialogueCamera;
     [Tooltip("关闭时完全使用场景里 DialogueCamera 的手动位置和镜头参数。")]
@@ -32,6 +40,12 @@ public sealed class QuestNpc : MonoBehaviour
 
     private bool promptVisible;
     private bool promptInitialized;
+    private bool isStagingDialogue;
+    private PlayerController stagedPlayerController;
+    private ThirdPersonCam stagedLookController;
+    private Animator stagedAnimator;
+    private bool stagedPlayerControllerWasEnabled;
+    private bool stagedLookControllerWasEnabled;
 
     private void Start()
     {
@@ -48,8 +62,8 @@ public sealed class QuestNpc : MonoBehaviour
     {
         if (player == null || QuestUI.Instance == null) return;
         bool nearby = Vector3.Distance(player.position, transform.position) <= interactionRange;
-        SetPrompt(nearby && !QuestUI.Instance.IsDialogueOpen);
-        if (nearby && !QuestUI.Instance.IsDialogueOpen && Input.GetKeyDown(KeyCode.E))
+        SetPrompt(nearby && !isStagingDialogue && !QuestUI.Instance.IsDialogueOpen);
+        if (nearby && !isStagingDialogue && !QuestUI.Instance.IsDialogueOpen && Input.GetKeyDown(KeyCode.E))
             Interact();
     }
 
@@ -59,6 +73,125 @@ public sealed class QuestNpc : MonoBehaviour
         QuestUI ui = QuestUI.Instance;
         QuestData quest = FindCurrentQuest(manager);
         if (manager == null || ui == null || quest == null) return;
+
+        if (playerStandPoint != null)
+        {
+            StartCoroutine(MovePlayerToDialoguePoint(manager, ui, quest));
+            return;
+        }
+
+        OpenQuestDialogue(manager, ui, quest);
+    }
+
+    private IEnumerator MovePlayerToDialoguePoint(
+        QuestManager manager,
+        QuestUI ui,
+        QuestData quest)
+    {
+        isStagingDialogue = true;
+        SetPrompt(false);
+
+        stagedPlayerController = player.GetComponent<PlayerController>();
+        stagedLookController = player.GetComponent<ThirdPersonCam>();
+        stagedAnimator = player.GetComponentInChildren<Animator>();
+        stagedPlayerControllerWasEnabled = stagedPlayerController != null && stagedPlayerController.enabled;
+        stagedLookControllerWasEnabled = stagedLookController != null && stagedLookController.enabled;
+
+        if (stagedPlayerController != null)
+            stagedPlayerController.enabled = false;
+        if (stagedLookController != null)
+        {
+            stagedLookController.SetMouseInputEnabled(false);
+            stagedLookController.enabled = false;
+        }
+
+        Rigidbody body = player.GetComponent<Rigidbody>();
+        if (body != null)
+            body.velocity = new Vector3(0f, body.velocity.y, 0f);
+
+        SetWalkingAnimation(true);
+        Transform facingTransform = stagedLookController != null && stagedLookController.playerObj != null
+            ? stagedLookController.playerObj
+            : player;
+
+        Vector3 planarOffset = playerStandPoint.position - player.position;
+        planarOffset.y = 0f;
+        float stopDistanceSqr = stagingStopDistance * stagingStopDistance;
+
+        while (planarOffset.sqrMagnitude > stopDistanceSqr)
+        {
+            Vector3 currentPosition = player.position;
+            // 站位点只决定水平位置。Y 轴继续交给刚体和地面处理，避免
+            // StandPoint 高度有细小误差时永远无法满足到达条件。
+            Vector3 planarTarget = new Vector3(
+                playerStandPoint.position.x,
+                currentPosition.y,
+                playerStandPoint.position.z);
+            Vector3 nextPosition = Vector3.MoveTowards(
+                currentPosition,
+                planarTarget,
+                stagingMoveSpeed * Time.fixedDeltaTime);
+            Vector3 moveDirection = nextPosition - currentPosition;
+            moveDirection.y = 0f;
+
+            if (moveDirection.sqrMagnitude > 0.0001f)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(moveDirection, Vector3.up);
+                facingTransform.rotation = Quaternion.RotateTowards(
+                    facingTransform.rotation,
+                    targetRotation,
+                    stagingRotationSpeed * Time.fixedDeltaTime);
+            }
+
+            if (body != null)
+                body.MovePosition(nextPosition);
+            else
+                player.position = nextPosition;
+
+            yield return new WaitForFixedUpdate();
+
+            planarOffset = playerStandPoint.position - player.position;
+            planarOffset.y = 0f;
+        }
+
+        Vector3 finalPosition = player.position;
+        finalPosition.x = playerStandPoint.position.x;
+        finalPosition.z = playerStandPoint.position.z;
+        if (body != null)
+        {
+            body.position = finalPosition;
+            body.velocity = Vector3.zero;
+        }
+        else
+        {
+            player.position = finalPosition;
+        }
+
+        // 先退出走路状态，再原地转向 NPC，最后才打开对话。
+        SetWalkingAnimation(false);
+        Vector3 lookDirection = transform.position - facingTransform.position;
+        lookDirection.y = 0f;
+        if (lookDirection.sqrMagnitude > 0.0001f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(lookDirection, Vector3.up);
+            while (Quaternion.Angle(facingTransform.rotation, targetRotation) > 0.5f)
+            {
+                facingTransform.rotation = Quaternion.RotateTowards(
+                    facingTransform.rotation,
+                    targetRotation,
+                    stagingRotationSpeed * Time.deltaTime);
+                yield return null;
+            }
+            facingTransform.rotation = targetRotation;
+        }
+
+        RestoreStagingControl();
+        isStagingDialogue = false;
+        OpenQuestDialogue(manager, ui, quest);
+    }
+
+    private void OpenQuestDialogue(QuestManager manager, QuestUI ui, QuestData quest)
+    {
         PositionDialogueCamera();
 
         QuestState state = manager.GetState(quest);
@@ -87,6 +220,28 @@ public sealed class QuestNpc : MonoBehaviour
             ui.ShowDialogue(quest.CompletedDialogue, closeLabel, false, null,
                 dialogueCamera, false, true);
         }
+    }
+
+    private void SetWalkingAnimation(bool walking)
+    {
+        if (stagedAnimator == null) return;
+        stagedAnimator.SetBool("Push", false);
+        stagedAnimator.SetBool("Run", walking);
+    }
+
+    private void RestoreStagingControl()
+    {
+        if (stagedPlayerController != null)
+            stagedPlayerController.enabled = stagedPlayerControllerWasEnabled;
+        if (stagedLookController != null)
+        {
+            stagedLookController.enabled = stagedLookControllerWasEnabled;
+            stagedLookController.SetMouseInputEnabled(stagedLookControllerWasEnabled);
+        }
+
+        stagedPlayerController = null;
+        stagedLookController = null;
+        stagedAnimator = null;
     }
 
     private void ShowQuestOffer(QuestData quest, QuestManager manager, QuestUI ui)
@@ -205,5 +360,20 @@ public sealed class QuestNpc : MonoBehaviour
     {
         Gizmos.color = Color.cyan;
         Gizmos.DrawWireSphere(transform.position, interactionRange);
+
+        if (playerStandPoint != null)
+        {
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireSphere(playerStandPoint.position, stagingStopDistance);
+            Gizmos.DrawLine(transform.position, playerStandPoint.position);
+        }
+    }
+
+    private void OnDisable()
+    {
+        if (!isStagingDialogue) return;
+        SetWalkingAnimation(false);
+        RestoreStagingControl();
+        isStagingDialogue = false;
     }
 }
