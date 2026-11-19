@@ -238,23 +238,13 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 92855279926584434, guid: 739602b3acb3dbc48a43e060a5a097a0,
         type: 3}
-      propertyPath: m_StaticEditorFlags
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5276510224540180822, guid: 739602b3acb3dbc48a43e060a5a097a0,
-        type: 3}
-      propertyPath: m_StaticEditorFlags
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 6308551767483171964, guid: 739602b3acb3dbc48a43e060a5a097a0,
-        type: 3}
-      propertyPath: m_StaticEditorFlags
-      value: 0
+      propertyPath: m_Name
+      value: Box_1
       objectReference: {fileID: 0}
     - target: {fileID: 92855279926584434, guid: 739602b3acb3dbc48a43e060a5a097a0,
         type: 3}
-      propertyPath: m_Name
-      value: Box_1
+      propertyPath: m_StaticEditorFlags
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1834431170358087854, guid: 739602b3acb3dbc48a43e060a5a097a0,
         type: 3}
@@ -314,6 +304,16 @@ PrefabInstance:
     - target: {fileID: 3968439531708733025, guid: 739602b3acb3dbc48a43e060a5a097a0,
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5276510224540180822, guid: 739602b3acb3dbc48a43e060a5a097a0,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6308551767483171964, guid: 739602b3acb3dbc48a43e060a5a097a0,
+        type: 3}
+      propertyPath: m_StaticEditorFlags
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
