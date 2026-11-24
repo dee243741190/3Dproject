@@ -33416,7 +33416,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   menuCanvasGroup: {fileID: 147680700}
   newGameButton: {fileID: 678973449}
-  continueButton: {fileID: 1622099664}
   settingsButton: {fileID: 1250612770}
   quitButton: {fileID: 404392616}
   fadeOutDuration: 0.6
@@ -399958,7 +399957,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1622099663
 RectTransform:
   m_ObjectHideFlags: 0
