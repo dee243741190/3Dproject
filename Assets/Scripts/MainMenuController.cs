@@ -1,12 +1,11 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.Playables;
 using UnityEngine.UI;
 using Cinemachine;
 
 /// <summary>
 /// 主菜单控制器：负责开始新游戏、打开设置、退出游戏，
-/// 并在开场动画结束后把镜头和操作权交给玩家。
+/// 并在主菜单淡出后切换镜头、启用玩家操作。
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class MainMenuController : MonoBehaviour
@@ -19,19 +18,18 @@ public sealed class MainMenuController : MonoBehaviour
     [SerializeField] private Button quitButton;
     [Min(0f)] [SerializeField] private float fadeOutDuration = 0.6f;
 
-    // 开始新游戏时播放的 Timeline，以及进入游戏后需要启用的玩家控制脚本。
+    // 进入游戏后需要启用的玩家移动和镜头控制脚本。
     [Header("New Game")]
-    [SerializeField] private PlayableDirector beginTimeline;
     [SerializeField] private PlayerController playerController;
     [SerializeField] private ThirdPersonCam thirdPersonCamera;
 
     [Header("Optional Settings Panel")]
     [SerializeField] private GameObject settingsPanel;
 
-    // 防止玩家重复点击“新游戏”，导致多个过场协程同时运行。
+    // 防止玩家重复点击“新游戏”，导致多个切换协程同时运行。
     private bool isTransitioning;
 
-    // 游戏 HUD 在主菜单阶段隐藏，过场结束后再淡入。
+    // 游戏 HUD 在主菜单阶段隐藏，镜头切换完成后再淡入。
     [Header("Gameplay UI")]
     [SerializeField] private CanvasGroup gameUI;
     [Min(0f)] [SerializeField] private float gameUIFadeDuration = 0.6f;
@@ -71,13 +69,6 @@ public sealed class MainMenuController : MonoBehaviour
         if (menuCanvasGroup == null)
             menuCanvasGroup = gameObject.AddComponent<CanvasGroup>();
 
-        if (beginTimeline != null)
-        {
-            // Timeline 只能由“新游戏”按钮触发，不能随场景自动播放。
-            beginTimeline.playOnAwake = false;
-            beginTimeline.Stop();
-        }
-
         // 初始化为菜单状态：关闭玩家操作，显示并启用主菜单。
         SetGameplayControl(false);
         SetMenuVisible(true);
@@ -106,7 +97,7 @@ public sealed class MainMenuController : MonoBehaviour
 
     public void StartNewGame()
     {
-        // 开场流程已经启动时忽略重复点击。
+        // 切换流程已经启动时忽略重复点击。
         if (isTransitioning)
             return;
 
@@ -125,21 +116,7 @@ public sealed class MainMenuController : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        if (beginTimeline != null)
-        {
-            // 从头播放开场 Timeline，并等待它彻底播放完毕。
-            beginTimeline.time = 0d;
-            beginTimeline.Play();
-            yield return null;
-
-            while (beginTimeline.state == PlayState.Playing)
-                yield return null;
-
-            // 再等待一帧，确保 Timeline 的最后一次镜头更新已经完成。
-            yield return new WaitForEndOfFrame();
-        }
-
-        // Timeline 释放镜头后，等待 Brain 完成向第三人称的交接。
+        // 降低菜单镜头的优先级，等待 Cinemachine 切换到第三人称镜头。
         if (menuCamera != null && gameplayCamera != null)
             menuCamera.Priority = gameplayCamera.Priority - 1;
         yield return null;

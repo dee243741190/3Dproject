@@ -106488,7 +106488,6 @@ MonoBehaviour:
   settingsButton: {fileID: 1160994391}
   quitButton: {fileID: 1451735625}
   fadeOutDuration: 0.5
-  beginTimeline: {fileID: 2076551729}
   playerController: {fileID: 412927977}
   thirdPersonCamera: {fileID: 412927978}
   settingsPanel: {fileID: 2070785185}
@@ -384478,9 +384477,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1532811736}
-  - component: {fileID: 1532811737}
   m_Layer: 0
-  m_Name: DialogueTimeline
+  m_Name: DialogueCameraRoot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -384502,26 +384500,6 @@ Transform:
   - {fileID: 893276981}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!320 &1532811737
-PlayableDirector:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1532811735}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_PlayableAsset: {fileID: 11400000, guid: 7e8c360d33f61e844a5d4ba022e5054c, type: 2}
-  m_InitialState: 0
-  m_WrapMode: 0
-  m_DirectorUpdateMode: 1
-  m_InitialTime: 0
-  m_SceneBindings:
-  - key: {fileID: -6184957060847936112, guid: 7e8c360d33f61e844a5d4ba022e5054c, type: 2}
-    value: {fileID: 1927040804}
-  m_ExposedReferences:
-    m_References:
-    - 89b00b6935da65443a7be1295c4be480: {fileID: 893276982}
 --- !u!1001 &1532873821
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -514880,42 +514858,13 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 2076551730}
-  - component: {fileID: 2076551729}
   m_Layer: 0
-  m_Name: BeginTimeline
+  m_Name: MenuCameraRoot
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!320 &2076551729
-PlayableDirector:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2076551728}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_PlayableAsset: {fileID: 11400000, guid: 53937ac5b2729e84889d580e0844e8a1, type: 2}
-  m_InitialState: 0
-  m_WrapMode: 2
-  m_DirectorUpdateMode: 1
-  m_InitialTime: 0
-  m_SceneBindings:
-  - key: {fileID: 0}
-    value: {fileID: 0}
-  - key: {fileID: 0}
-    value: {fileID: 0}
-  - key: {fileID: 7524315364644915964, guid: 53937ac5b2729e84889d580e0844e8a1, type: 2}
-    value: {fileID: 1927040804}
-  - key: {fileID: 2248557930451491757, guid: 53937ac5b2729e84889d580e0844e8a1, type: 2}
-    value: {fileID: 361493600}
-  m_ExposedReferences:
-    m_References:
-    - aa5d80bf508760842ad79c4f8f6188e6: {fileID: 679758060}
-    - a11c80c2fdbbedd4ca9b8cb8c8d14885: {fileID: 361493598}
-    - 660a68bc6937cef4eaac86b71d725ed8: {fileID: 361493598}
 --- !u!4 &2076551730
 Transform:
   m_ObjectHideFlags: 0
